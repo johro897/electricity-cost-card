@@ -2,8 +2,6 @@
 
 A Home Assistant custom card that displays real-time electricity pricing from Nordpool with per-activity cost calculations, a price graph for upcoming hours, and smart recommendations for when to run your appliances.
 
----
-
 ## Features
 
 - **Live price** from Nordpool sensor (15-minute blocks)
@@ -15,7 +13,6 @@ A Home Assistant custom card that displays real-time electricity pricing from No
 - **Visual editor** — configure all settings directly in the HA dashboard UI, with a generated YAML snippet you can copy
 - **Threshold-based recommendations** — Good / OK / Wait per appliance, based on price per kWh vs your own threshold
 
----
 
 ## Requirements
 
@@ -24,22 +21,27 @@ A Home Assistant custom card that displays real-time electricity pricing from No
   - `state` — current price in kr/kWh
   - `attributes.today` — list of 96 price values (one per 15-minute block)
 
----
 
 ## Installation
 
-1. Copy `electricity-cost-card.js` to `/config/www/electricity-cost-card.js`
+### 1. Via HACS (recommended)
 
-2. Add the resource in Home Assistant:  
-   **Settings → Dashboards → Resources → Add resource**
+Installation is easiest via the [Home Assistant Community Store (HACS)](https://hacs.xyz/), which is the best place to get third-party integrations for Home Assistant. Once you have HACS set up, simply click the button below (requires My Home Assistant configured) or follow the [instructions for adding a custom repository](https://hacs.xyz/docs/faq/custom_repositories) and then locate **Electricity Cost Card** under **Frontend** and install it.
+
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=johro897&repository=electricity-cost-card&category=dashboard)
+
+### 2. Manual install
+
+1. Copy `electricity-cost-card.js` to `/config/www/electricity-cost-card/electricity-cost-card.js`
+
+2. Add the resource through **Settings → Dashboards → Resources → +**:
+   ```yaml
+   url: /local/electricity-cost-card/electricity-cost-card.js
+   type: module
    ```
-   URL:  /local/electricity-cost-card.js
-   Type: JavaScript module
-   ```
 
-3. Reload the browser (hard refresh) or restart HA
+3. Reload the browser cache (`Ctrl/Cmd + Shift + R`)
 
----
 
 ## Configuration
 
@@ -111,7 +113,6 @@ activities:
 | `threshold` | number | ✓ | Price per kWh below which the activity is considered "good" |
 | `duration_hours` | number | — | Runtime in hours. Enables integrated cost calculation and best-window search |
 
----
 
 ## How recommendations work
 
@@ -134,7 +135,6 @@ For activities with `duration_hours`, the price used is the **average price over
 | Dishwasher | `1.0` – `1.2` |
 | Shower (hard to defer) | `1.5` – `2.0` |
 
----
 
 ## How duration cost is calculated
 
@@ -148,7 +148,6 @@ cost = average_price_over_window × kwh
 
 **Best window** — slides a window of the same length across the next `search_hours` and finds the slot with the lowest average price. The saving percentage is shown if it exceeds 3%.
 
----
 
 ## Visual editor
 
@@ -160,14 +159,11 @@ The card includes a built-in visual editor accessible from the HA dashboard UI. 
 
 The editor does not save to a file — it updates the card config in your dashboard's YAML, which is backed up with Home Assistant as usual.
 
----
-
 ## Storage and backup
 
 All configuration lives in the dashboard YAML (`ui-lovelace.yaml` or the `.storage/lovelace.*` files depending on your setup). It is included in Home Assistant backups automatically and shared across all devices and browsers that access your HA instance.
 
----
 
 ## License
 
-MIT
+MIT © 2026
