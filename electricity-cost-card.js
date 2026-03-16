@@ -5,23 +5,28 @@
 // calculations. Activities without duration_hours show a simple cost + rec-
 // ommendation. Activities with duration_hours show:
 //   • Integrated cost if started NOW (summed over real 15-min price blocks)
-//   • Cheapest window within the next 12 hours
+//   • Cheapest window within search_hours, crossing midnight if needed
 //
 // Required sensor attributes:
-//   state  — current price (kr/kWh)
-//   today  — list of 15-minute price blocks for the full day
+//   state     — current price (kr/kWh)
+//   today     — list of 96 × 15-minute price blocks for today
+//   tomorrow  — list of 15-minute price blocks for tomorrow (available ~13:00)
+//               When present, today+tomorrow are merged so graphs and best-
+//               window searches cross midnight seamlessly.
 //
 // YAML config example:
 //   type: custom:electricity-cost-card
 //   entity: sensor.nordpool_kwh_se3_sek_3_10_025
 //   hours_ahead: 6       — how many hours the price graph covers
 //   search_hours: 12     — how far ahead to search for the best activity window
+//   price_good: 1.5      — price ceiling (kr/kWh) for "Good price" badge
+//   price_ok: 3.0        — price ceiling (kr/kWh) for "Normal" badge; above = "High price"
 //   activities:
 //     - name: Dishwasher
 //       icon: "🍽️"
 //       kwh_min: 0.7
 //       kwh_max: 1.5
-//       threshold: 1.5
+//       threshold: 1.2    — activity rec: Good ≤ threshold, OK ≤ threshold×2, else Wait
 //       duration_hours: 2.0
 //     - name: 10-min shower
 //       icon: "🚿"
@@ -90,10 +95,14 @@ class ElectricityCostCardEditor extends HTMLElement {
   }
 
   _updateRoot(field, value) {
-    const intFields = ['hours_ahead', 'search_hours'];
-    this._config = { ...this._config, [field]: intFields.includes(field) ? parseInt(value) : value };
+    const intFields   = ['hours_ahead', 'search_hours'];
+    const floatFields = ['price_good', 'price_ok'];
+    let parsed = value;
+    if (intFields.includes(field))   parsed = parseInt(value);
+    if (floatFields.includes(field)) parsed = parseFloat(value);
+    this._config = { ...this._config, [field]: parsed };
     this._dispatch();
-    if (field !== 'entity' && field !== 'hours_ahead' && field !== 'search_hours') this._render();
+    if (!['entity', 'hours_ahead', 'search_hours', 'price_good', 'price_ok'].includes(field)) this._render();
   }
 
   _render() {
@@ -201,6 +210,14 @@ class ElectricityCostCardEditor extends HTMLElement {
           <label>Best window: search hours</label>
           <input id="search-input" type="number" min="1" max="24" value="${c.search_hours ?? 12}"/>
         </div>
+        <div class="field">
+          <label>Good price ceiling (kr/kWh)</label>
+          <input id="price-good-input" type="number" step="0.1" min="0.1" value="${c.price_good ?? 1.5}"/>
+        </div>
+        <div class="field">
+          <label>Normal price ceiling (kr/kWh)</label>
+          <input id="price-ok-input" type="number" step="0.1" min="0.1" value="${c.price_ok ?? 3.0}"/>
+        </div>
       </div>
 
       <div class="section">Activities</div>
@@ -218,6 +235,10 @@ class ElectricityCostCardEditor extends HTMLElement {
       .addEventListener('change', e => this._updateRoot('hours_ahead', e.target.value));
     this.shadowRoot.getElementById('search-input')
       .addEventListener('change', e => this._updateRoot('search_hours', e.target.value));
+    this.shadowRoot.getElementById('price-good-input')
+      .addEventListener('change', e => this._updateRoot('price_good', e.target.value));
+    this.shadowRoot.getElementById('price-ok-input')
+      .addEventListener('change', e => this._updateRoot('price_ok', e.target.value));
 
     // ── Activity field listeners (delegated) ─────────────────────────────
     this.shadowRoot.getElementById('activity-list')
@@ -277,6 +298,8 @@ class ElectricityCostCardEditor extends HTMLElement {
 entity: ${c.entity ?? 'sensor.nordpool_kwh_...'}
 hours_ahead: ${c.hours_ahead ?? 6}
 search_hours: ${c.search_hours ?? 12}
+price_good: ${c.price_good ?? 1.5}
+price_ok: ${c.price_ok ?? 3.0}
 activities:
 ${acts}`;
 
@@ -299,7 +322,9 @@ class ElectricityCostCard extends HTMLElement {
     this._config    = {};
     this._livePrice = null;   // Price from HA sensor state
     this._simPrice  = null;   // Non-null when user is dragging the slider
-    this._today     = [];     // 15-min price blocks for today
+    this._today     = [];     // 15-min price blocks for today (96 entries)
+    this._tomorrow  = [];     // 15-min price blocks for tomorrow (available from ~13:00)
+    this._prices    = [];     // today + tomorrow merged — used for all look-aheads
   }
 
   // Called by HA when the card config is set or changed.
@@ -309,6 +334,8 @@ class ElectricityCostCard extends HTMLElement {
       entity:       config.entity,
       hours_ahead:  config.hours_ahead  ?? 6,
       search_hours: config.search_hours ?? 12,
+      price_good:   config.price_good   ?? 1.5,  // Good price ceiling (kr/kWh)
+      price_ok:     config.price_ok     ?? 3.0,  // OK/Normal ceiling (kr/kWh)
       activities:   config.activities   ?? [],
     };
     this._render();
@@ -320,7 +347,11 @@ class ElectricityCostCard extends HTMLElement {
     const stateObj = hass.states[this._config.entity];
     if (!stateObj) return;
     this._livePrice = parseFloat(stateObj.state);
-    this._today     = stateObj.attributes.today ?? [];
+    this._today     = stateObj.attributes.today    ?? [];
+    this._tomorrow  = stateObj.attributes.tomorrow ?? [];
+    // Merge into a single timeline so all look-ahead logic crosses midnight seamlessly.
+    // today has 96 blocks (00:00–23:45), tomorrow appended starts at index 96 (= 00:00 next day).
+    this._prices = [...this._today, ...this._tomorrow];
     this._render();
   }
 
@@ -338,6 +369,8 @@ class ElectricityCostCard extends HTMLElement {
       entity:       'sensor.nordpool_kwh_se3_sek_3_10_025',
       hours_ahead:  6,
       search_hours: 12,
+      price_good:   1.5,
+      price_ok:     3.0,
       activities: [
         { name: 'Dishwasher',    icon: '🍽️', kwh_min: 0.7, kwh_max: 1.5, threshold: 1.5, duration_hours: 2.0 },
         { name: 'Wash & tumble', icon: '👕', kwh_min: 2.0, kwh_max: 4.0, threshold: 1.0, duration_hours: 3.0 },
@@ -357,9 +390,11 @@ class ElectricityCostCard extends HTMLElement {
   }
 
   // "HH:MM" label for a given block index.
+  // Indices 0–95 = today, 96–191 = tomorrow. We always show clock time, never "day+1".
   _blockTime(idx) {
-    const h = Math.floor(idx / 4);
-    const m = (idx % 4) * 15;
+    const dayIdx = idx % 96;  // wrap so tomorrow's blocks show their own clock time
+    const h = Math.floor(dayIdx / 4);
+    const m = (dayIdx % 4) * 15;
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
   }
 
@@ -381,11 +416,13 @@ class ElectricityCostCard extends HTMLElement {
     return '#A32D2D';               // dark red
   }
 
-  // Overall status badge for current price.
+  // Overall status badge — uses price_good / price_ok from root config.
   _priceStatus(p) {
-    if (p <= 1.5) return { cls: 'good', label: 'Good price' };
-    if (p <= 3.0) return { cls: 'ok',   label: 'Normal'     };
-    return              { cls: 'bad',   label: 'High price'  };
+    const good = this._config.price_good ?? 1.5;
+    const ok   = this._config.price_ok   ?? 3.0;
+    if (p <= good) return { cls: 'good', label: 'Good price' };
+    if (p <= ok)   return { cls: 'ok',   label: 'Normal'     };
+    return               { cls: 'bad',   label: 'High price'  };
   }
 
   // Per-activity simple recommendation (used when no duration_hours).
@@ -399,11 +436,12 @@ class ElectricityCostCard extends HTMLElement {
   // ── Duration cost calculations ─────────────────────────────────────────────
 
   // Average price per kWh over `numBlocks` 15-min blocks starting at `startIdx`.
+  // Uses the merged today+tomorrow price array so windows can cross midnight.
   // Returns null if not enough data.
   _avgPriceForWindow(startIdx, numBlocks) {
     const blocks = [];
     for (let i = 0; i < numBlocks; i++) {
-      const p = this._today[startIdx + i];
+      const p = this._prices[startIdx + i];
       if (p !== undefined) blocks.push(p);
     }
     if (!blocks.length) return null;
@@ -425,13 +463,14 @@ class ElectricityCostCard extends HTMLElement {
   }
 
   // Find the cheapest consecutive window of `duration_hours` within search_hours.
+  // Uses the merged today+tomorrow array so searches can cross midnight.
   // Returns { avgPrice, costMin, costMax, startTime, endTime, isNow } or null.
   _bestWindow(activity) {
-    const numBlocks  = Math.round(activity.duration_hours * 4);
-    const startIdx   = this._currentBlockIndex();
+    const numBlocks    = Math.round(activity.duration_hours * 4);
+    const startIdx     = this._currentBlockIndex();
     // Respect search_hours config — convert hours to blocks (4 per hour).
     const searchBlocks = this._config.search_hours * 4;
-    const maxSearch  = Math.min(this._today.length - numBlocks, startIdx + searchBlocks);
+    const maxSearch    = Math.min(this._prices.length - numBlocks, startIdx + searchBlocks);
 
     let bestAvg   = Infinity;
     let bestStart = startIdx;
@@ -460,16 +499,17 @@ class ElectricityCostCard extends HTMLElement {
   // ── Price graph ────────────────────────────────────────────────────────────
 
   // Build the list of upcoming blocks for the graph.
+  // Uses merged today+tomorrow so the graph crosses midnight seamlessly.
   _getUpcomingBlocks() {
     const blocksAhead = this._config.hours_ahead * 4;
     const idx         = this._currentBlockIndex();
     const blocks      = [];
     for (let i = 0; i < blocksAhead; i++) {
       const pos = idx + i;
-      if (pos < this._today.length) {
+      if (pos < this._prices.length) {
         blocks.push({
           time:      this._blockTime(pos),
-          price:     this._today[pos],
+          price:     this._prices[pos],
           isCurrent: i === 0,
         });
       }
