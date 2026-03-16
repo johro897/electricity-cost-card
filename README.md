@@ -2,6 +2,8 @@
 
 A Home Assistant custom card that displays real-time electricity pricing from Nordpool with per-activity cost calculations, a price graph for upcoming hours, and smart recommendations for when to run your appliances.
 
+![](screenshots/screenshot.png)
+
 ## Features
 
 - **Live price** from Nordpool sensor (15-minute blocks)
