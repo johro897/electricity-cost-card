@@ -7,10 +7,10 @@ A Home Assistant custom card that displays real-time electricity pricing from No
 ## Features
 
 - **Live price** from Nordpool sensor (15-minute blocks)
-- **Price graph** covering the next N hours, configurable per dashboard
+- **Price graph** covering the next N hours, configurable per dashboard — crosses midnight seamlessly using tomorrow's prices when available
 - **Per-activity cost** — each appliance shows what it will cost right now
 - **Duration mode** — appliances with a set runtime show the integrated cost over real upcoming price blocks, not just the current spot price
-- **Best window** — finds the cheapest consecutive time slot within your search horizon
+- **Best window** — finds the cheapest consecutive time slot within your search horizon, including overnight
 - **Simulation slider** — drag to simulate any price and see how costs change; resets to live with one tap
 - **Visual editor** — configure all settings directly in the HA dashboard UI, with a generated YAML snippet you can copy
 - **Threshold-based recommendations** — Good / OK / Wait per appliance, based on price per kWh vs your own threshold
@@ -22,6 +22,7 @@ A Home Assistant custom card that displays real-time electricity pricing from No
 - The Nordpool sensor must expose:
   - `state` — current price in kr/kWh
   - `attributes.today` — list of 96 price values (one per 15-minute block)
+  - `attributes.tomorrow` — list of price values for tomorrow (published by Nordpool ~13:00 each day, used to extend the graph and best-window search past midnight)
 
 
 ## Installation
@@ -69,6 +70,8 @@ type: custom:electricity-cost-card
 entity: sensor.nordpool_kwh_se3_sek_3_10_025
 hours_ahead: 6
 search_hours: 12
+price_good: 1.5
+price_ok: 3.0
 activities:
   - name: Dishwasher
     icon: "🍽️"
@@ -102,6 +105,8 @@ activities:
 | `entity` | string | **required** | Nordpool sensor entity ID |
 | `hours_ahead` | integer | `6` | How many hours the price graph covers |
 | `search_hours` | integer | `12` | How far ahead to search for the best activity window |
+| `price_good` | number | `1.5` | Price ceiling (kr/kWh) for the "Good price" status badge |
+| `price_ok` | number | `3.0` | Price ceiling (kr/kWh) for the "Normal" badge — above this shows "High price" |
 | `activities` | list | `[]` | List of activity definitions (see below) |
 
 ### Activity options
@@ -118,7 +123,19 @@ activities:
 
 ## How recommendations work
 
-Recommendations compare the **current price per kWh** against the activity's `threshold`:
+### Overall price badge
+
+The status badge in the top-right corner compares the current price against `price_good` and `price_ok`:
+
+| Condition | Badge |
+|---|---|
+| `price ≤ price_good` | 🟢 Good price |
+| `price ≤ price_ok` | 🟡 Normal |
+| `price > price_ok` | 🔴 High price |
+
+### Per-activity recommendation
+
+Each activity compares the price against its own `threshold`:
 
 | Condition | Badge |
 |---|---|
@@ -146,20 +163,21 @@ When `duration_hours` is set, the card looks up the actual 15-minute price block
 cost = average_price_over_window × kwh
 ```
 
-**Cost if started now** — sums the real upcoming blocks covering the full runtime.
+**Cost if started now** — integrates the real upcoming blocks covering the full runtime.
 
-**Best window** — slides a window of the same length across the next `search_hours` and finds the slot with the lowest average price. The saving percentage is shown if it exceeds 3%.
+**Best window** — slides a window of the same length across the next `search_hours` and finds the slot with the lowest average price. Searches cross midnight automatically when tomorrow's prices are available. The saving percentage is shown if it exceeds 3%.
 
 
 ## Visual editor
 
 The card includes a built-in visual editor accessible from the HA dashboard UI. It allows you to:
 
-- Set the entity and graph/search hours
+- Set the entity, graph hours, search hours, and price thresholds
 - Add, edit, and remove activities with all fields
 - Copy the generated YAML at any time
 
 The editor does not save to a file — it updates the card config in your dashboard's YAML, which is backed up with Home Assistant as usual.
+
 
 ## Storage and backup
 
