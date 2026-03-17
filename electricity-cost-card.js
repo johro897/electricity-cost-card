@@ -380,11 +380,6 @@ class ElectricityCostCard extends HTMLElement {
     };
   }
 
-  // Links to documentation from the HA card picker and editor UI.
-  static getConfigDocumentation() {
-    return 'https://github.com/johro897/electricity-cost-card';
-  }
-
 
   // ── Time helpers ───────────────────────────────────────────────────────────
 
@@ -877,8 +872,9 @@ customElements.define('electricity-cost-card', ElectricityCostCard);
 // Register card in HA card picker
 window.customCards = window.customCards || [];
 window.customCards.push({
-  type:        'electricity-cost-card',
-  name:        'Electricity Cost Card',
-  description: 'Real-time electricity pricing from Nordpool with per-activity cost calculations.',
-  preview:     true,
+  type:             'electricity-cost-card',
+  name:             'Electricity Cost Card',
+  description:      'Real-time electricity pricing from Nordpool with per-activity cost calculations.',
+  preview:          true,
+  documentationURL: 'https://github.com/johro897/electricity-cost-card',
 });
