@@ -380,6 +380,11 @@ class ElectricityCostCard extends HTMLElement {
     };
   }
 
+  // Links to documentation from the HA card picker and editor UI.
+  static getConfigDocumentation() {
+    return 'https://github.com/johro897/electricity-cost-card';
+  }
+
 
   // ── Time helpers ───────────────────────────────────────────────────────────
 
@@ -606,6 +611,37 @@ class ElectricityCostCard extends HTMLElement {
     }
 
     // ── Duration mode: integrated cost over actual block prices ───────────
+    //
+    // Simulation mode: when the user has dragged the slider, we skip the
+    // real-price integration and simply multiply simPrice × kWh, mirroring
+    // how simple activities behave. Best-window is hidden during simulation
+    // because it is based on real future prices and would be misleading.
+    const isSimulating = this._simPrice !== null;
+
+    if (isSimulating) {
+      const price   = this._simPrice;
+      const cMin    = activity.kwh_min * price;
+      const cMax    = activity.kwh_max * price;
+      const costStr = activity.kwh_min === activity.kwh_max
+        ? `${this._fmt(cMin)} kr`
+        : `${this._fmt(cMin)}–${this._fmt(cMax)} kr`;
+      const rec = this._simpleRec(price, activity.threshold ?? 1.5);
+      const durLabel = `${kwhStr} · ${activity.duration_hours}h`;
+      return `
+        <div class="activity">
+          <div class="activity-icon" style="background:${iconBg}">${activity.icon}</div>
+          <div class="activity-info">
+            <div class="activity-name">${activity.name}</div>
+            <div class="activity-sub">${durLabel}</div>
+          </div>
+          <div class="activity-right">
+            <div class="activity-cost">${costStr}</div>
+            <div class="rec rec-${rec.cls}"><span class="rec-dot rdot-${rec.cls}"></span>${rec.label}</div>
+          </div>
+        </div>`;
+    }
+
+    // Live mode: integrate real upcoming block prices over the full duration.
     const nowCost  = this._costIfStartNow(activity);
     const best     = this._bestWindow(activity);
     const durLabel = `${kwhStr} · ${activity.duration_hours}h`;
