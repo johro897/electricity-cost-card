@@ -571,15 +571,19 @@ class ElectricityCostCard extends HTMLElement {
     return blocks;
   }
 
-  // Render SVG bar chart + trend line for upcoming blocks.
+  // Render price graph with HTML y-axis labels and SVG bar chart.
+  // Y-axis labels are rendered as HTML so they inherit the HA theme font
+  // automatically, matching the x-axis time labels below the chart.
   _buildGraph(blocks) {
     if (!blocks.length) {
       return '<div style="font-size:11px;color:var(--secondary-text-color);padding:8px 0;">No price data available</div>';
     }
     const prices = blocks.map(b => b.price);
     const maxP   = Math.max(...prices, 0.1);
-    const W = 100, H = 52;
-    const barW   = Math.max(0.8, (W / prices.length) - 0.4);
+    const mid    = maxP / 2;
+    // W/H for the bar area. LEFT is reserved for y-axis labels in the HTML layer.
+    const W = 88, H = 52, LEFT = 14;
+    const barW = Math.max(0.8, (W / prices.length) - 0.4);
 
     const bars = prices.map((p, i) => {
       const bh  = Math.max(2, (p / maxP) * H);
@@ -590,18 +594,35 @@ class ElectricityCostCard extends HTMLElement {
       return `<rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${barW.toFixed(2)}" height="${bh.toFixed(2)}" fill="${col}" opacity="${op}"/>`;
     }).join('');
 
-    // Trend indicator comparing last vs first block
+    // Dashed reference lines at max and mid, solid baseline at 0.
+    const gridLines = `
+      <line x1="0" y1="1"        x2="${W}" y2="1"        stroke="var(--divider-color,#e0e0e0)" stroke-width="0.5" stroke-dasharray="2,2"/>
+      <line x1="0" y1="${H / 2}" x2="${W}" y2="${H / 2}" stroke="var(--divider-color,#e0e0e0)" stroke-width="0.5" stroke-dasharray="2,2"/>
+      <line x1="0" y1="${H}"     x2="${W}" y2="${H}"     stroke="var(--divider-color,#e0e0e0)" stroke-width="0.5"/>`;
+
     const diff       = prices[prices.length - 1] - prices[0];
     const trendSym   = diff > 0.05 ? '↑' : diff < -0.05 ? '↓' : '→';
     const trendColor = diff > 0.05 ? '#E24B4A' : diff < -0.05 ? '#639922' : '#888780';
     const lastPrice  = this._fmt(prices[prices.length - 1]);
 
+    // Y-axis labels as HTML — inherits HA theme font identically to x-axis spans.
     return `
-      <svg width="100%" viewBox="0 0 100 52" preserveAspectRatio="none" style="height:52px;display:block;">${bars}</svg>
-      <div style="display:flex;justify-content:space-between;margin-top:3px;">
-        <span style="font-size:10px;color:var(--secondary-text-color)">${blocks[0].time}</span>
-        <span style="font-size:11px;font-weight:500;color:${trendColor}">${trendSym} ${lastPrice} kr/kWh</span>
-        <span style="font-size:10px;color:var(--secondary-text-color)">${blocks[blocks.length - 1].time}</span>
+      <div style="position:relative;">
+        <div style="position:absolute;left:0;top:0;bottom:16px;display:flex;flex-direction:column;justify-content:space-between;text-align:right;width:${LEFT}px;">
+          <span style="font-size:10px;color:var(--secondary-text-color);line-height:1">${this._fmt(maxP)}</span>
+          <span style="font-size:10px;color:var(--secondary-text-color);line-height:1">${this._fmt(mid)}</span>
+          <span style="font-size:10px;color:var(--secondary-text-color);line-height:1">0</span>
+        </div>
+        <div style="margin-left:${LEFT + 3}px;overflow:hidden;">
+          <svg width="100%" viewBox="0 0 ${W} ${H + 2}" preserveAspectRatio="none" style="height:54px;display:block;">
+            ${gridLines}${bars}
+          </svg>
+          <div style="display:flex;justify-content:space-between;margin-top:3px;">
+            <span style="font-size:10px;color:var(--secondary-text-color)">${blocks[0].time}</span>
+            <span style="font-size:11px;font-weight:500;color:${trendColor}">${trendSym} ${lastPrice} kr/kWh</span>
+            <span style="font-size:10px;color:var(--secondary-text-color)">${blocks[blocks.length - 1].time}</span>
+          </div>
+        </div>
       </div>`;
   }
 
