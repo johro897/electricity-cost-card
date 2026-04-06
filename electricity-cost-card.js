@@ -17,10 +17,11 @@
 // YAML config example:
 //   type: custom:electricity-cost-card
 //   entity: sensor.nordpool_kwh_se3_sek_3_10_025
-//   hours_ahead: 6       — how many hours the price graph covers
-//   search_hours: 12     — how far ahead to search for the best activity window
-//   price_good: 1.5      — price ceiling (kr/kWh) for "Good price" badge
-//   price_ok: 3.0        — price ceiling (kr/kWh) for "Normal" badge; above = "High price"
+//   title: My electricity cost   — optional, defaults to "Electricity cost"
+//   hours_ahead: 6               — how many hours the price graph covers
+//   search_hours: 12             — how far ahead to search for the best activity window
+//   price_good: 1.5              — price ceiling (kr/kWh) for "Good price" badge
+//   price_ok: 3.0                — price ceiling (kr/kWh) for "Normal" badge; above = "High price"
 //   activities:
 //     - name: Dishwasher
 //       icon: "🍽️"
@@ -40,6 +41,14 @@
 // VISUAL EDITOR
 // Registered via getConfigElement() — HA shows this automatically when the
 // card is added or edited through the UI dashboard editor.
+//
+// Focus-preservation strategy:
+//   The editor shadow DOM is built ONCE in _render(). After that, all root
+//   field changes (entity, hours_ahead, etc.) only update _config and dispatch
+//   config-changed — they never call _render() again. This means the DOM stays
+//   intact and input focus is never stolen mid-keystroke.
+//   Only structural changes (add/remove activity) rebuild the DOM, which is
+//   unavoidable and expected behaviour.
 // =============================================================================
 
 class ElectricityCostCardEditor extends HTMLElement {
@@ -47,11 +56,19 @@ class ElectricityCostCardEditor extends HTMLElement {
     super();
     this.attachShadow({ mode: 'open' });
     this._config = {};
+    this._rendered = false;  // Track whether initial DOM has been built
   }
 
   setConfig(config) {
     this._config = structuredClone(config);
-    this._render();
+    // Always do a full render on first call or when activities change structurally.
+    // For root field edits HA calls setConfig again — we update input values
+    // in-place instead of rebuilding the DOM to preserve focus.
+    if (!this._rendered) {
+      this._render();
+    } else {
+      this._syncRootFields();
+    }
   }
 
   // Dispatch HA config-changed event so the card preview updates live.
@@ -68,6 +85,7 @@ class ElectricityCostCardEditor extends HTMLElement {
     acts.push({ name: '', icon: '⚡', kwh_min: 1.0, kwh_max: 1.0, threshold: 1.5 });
     this._config = { ...this._config, activities: acts };
     this._dispatch();
+    this._rendered = false;  // Force full rebuild so new row appears
     this._render();
   }
 
@@ -76,22 +94,8 @@ class ElectricityCostCardEditor extends HTMLElement {
     acts.splice(idx, 1);
     this._config = { ...this._config, activities: acts };
     this._dispatch();
+    this._rendered = false;  // Force full rebuild so removed row disappears
     this._render();
-  }
-
-  _updateActivity(idx, field, value) {
-    const acts = structuredClone(this._config.activities ?? []);
-    // Cast numeric fields
-    const numericFields = ['kwh_min', 'kwh_max', 'threshold', 'duration_hours'];
-    acts[idx][field] = numericFields.includes(field)
-      ? (value === '' ? undefined : parseFloat(value))
-      : value;
-    // Remove duration_hours key entirely if cleared
-    if (field === 'duration_hours' && !acts[idx].duration_hours) {
-      delete acts[idx].duration_hours;
-    }
-    this._config = { ...this._config, activities: acts };
-    this._dispatch();
   }
 
   _updateRoot(field, value) {
@@ -102,7 +106,26 @@ class ElectricityCostCardEditor extends HTMLElement {
     if (floatFields.includes(field)) parsed = parseFloat(value);
     this._config = { ...this._config, [field]: parsed };
     this._dispatch();
-    if (!['entity', 'hours_ahead', 'search_hours', 'price_good', 'price_ok'].includes(field)) this._render();
+    // Never call _render() here — doing so would steal focus from the active input.
+    // The YAML preview is refreshed separately without touching the input DOM.
+    this._refreshYaml();
+  }
+
+  // Update root input values in-place when HA calls setConfig after a dispatch.
+  // This keeps the DOM intact and input focus preserved.
+  _syncRootFields() {
+    const c = this._config;
+    const set = (id, val) => {
+      const el = this.shadowRoot.getElementById(id);
+      if (el && document.activeElement !== el) el.value = val ?? '';
+    };
+    set('entity-input',     c.entity      ?? '');
+    set('title-input',      c.title       ?? '');
+    set('hours-input',      c.hours_ahead ?? 6);
+    set('search-input',     c.search_hours ?? 12);
+    set('price-good-input', c.price_good  ?? 1.5);
+    set('price-ok-input',   c.price_ok    ?? 3.0);
+    this._refreshYaml();
   }
 
   _render() {
@@ -161,7 +184,7 @@ class ElectricityCostCardEditor extends HTMLElement {
           width: 100%;
         }
         input:focus, select:focus { outline: none; border-color: var(--primary-color); }
-        .root-grid { display: grid; grid-template-columns: minmax(0,2fr) minmax(0,1fr); gap: 10px; }
+        .root-grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 10px; }
         .act-row {
           background: var(--secondary-background-color, #f5f5f5);
           border-radius: 8px; padding: 12px; margin-bottom: 8px;
@@ -202,6 +225,10 @@ class ElectricityCostCardEditor extends HTMLElement {
           <label>Nordpool entity</label>
           <input id="entity-input" value="${c.entity ?? ''}" placeholder="sensor.nordpool_kwh_..."/>
         </div>
+        <div class="field" style="grid-column:1/-1">
+          <label>Card title (optional)</label>
+          <input id="title-input" value="${c.title ?? ''}" placeholder="Electricity cost"/>
+        </div>
         <div class="field">
           <label>Graph: hours ahead</label>
           <input id="hours-input" type="number" min="1" max="24" value="${c.hours_ahead ?? 6}"/>
@@ -228,9 +255,12 @@ class ElectricityCostCardEditor extends HTMLElement {
       <button class="copy-btn" id="copy-btn">Copy</button>
       <div class="yaml-box" id="yaml-preview"></div>`;
 
-    // ── Root field listeners ──────────────────────────────────────────────
+    // ── Root field listeners — use 'change' not 'input' to avoid per-keystroke
+    // dispatches that trigger setConfig → DOM rebuild → lost focus.
     this.shadowRoot.getElementById('entity-input')
       .addEventListener('change', e => this._updateRoot('entity', e.target.value.trim()));
+    this.shadowRoot.getElementById('title-input')
+      .addEventListener('change', e => this._updateRoot('title', e.target.value.trim()));
     this.shadowRoot.getElementById('hours-input')
       .addEventListener('change', e => this._updateRoot('hours_ahead', e.target.value));
     this.shadowRoot.getElementById('search-input')
@@ -240,18 +270,39 @@ class ElectricityCostCardEditor extends HTMLElement {
     this.shadowRoot.getElementById('price-ok-input')
       .addEventListener('change', e => this._updateRoot('price_ok', e.target.value));
 
-    // ── Activity field listeners (delegated) ─────────────────────────────
+    // ── Activity field listeners (delegated) — 'input' is fine here because
+    // activity changes do NOT trigger a _render() call.
+    // 'input' — fires on every keystroke: keeps YAML preview and row title live
+    // but does NOT dispatch to HA yet (avoids per-keystroke re-renders in the card preview).
     this.shadowRoot.getElementById('activity-list')
       .addEventListener('input', e => {
         const el = e.target;
         if (!el.dataset.idx) return;
-        this._updateActivity(parseInt(el.dataset.idx), el.dataset.field, el.value);
+        // Update internal config silently (no dispatch)
+        const acts = structuredClone(this._config.activities ?? []);
+        const numericFields = ['kwh_min', 'kwh_max', 'threshold', 'duration_hours'];
+        acts[parseInt(el.dataset.idx)][el.dataset.field] = numericFields.includes(el.dataset.field)
+          ? (el.value === '' ? undefined : parseFloat(el.value))
+          : el.value;
+        if (el.dataset.field === 'duration_hours' && !acts[parseInt(el.dataset.idx)].duration_hours) {
+          delete acts[parseInt(el.dataset.idx)].duration_hours;
+        }
+        this._config = { ...this._config, activities: acts };
+        // Update YAML preview and row title without touching the card preview
         this._refreshYaml();
-        // Update row title live
         if (el.dataset.field === 'name') {
           const titles = this.shadowRoot.querySelectorAll('.act-row-title');
           titles[parseInt(el.dataset.idx)].textContent = el.value || `Activity ${parseInt(el.dataset.idx) + 1}`;
         }
+      });
+
+    // 'change' — fires when focus leaves the field: dispatches to HA so the
+    // card preview updates. This is the moment the user has finished editing.
+    this.shadowRoot.getElementById('activity-list')
+      .addEventListener('change', e => {
+        const el = e.target;
+        if (!el.dataset.idx) return;
+        this._dispatch();
       });
 
     // Remove buttons
@@ -277,6 +328,7 @@ class ElectricityCostCardEditor extends HTMLElement {
         });
       });
 
+    this._rendered = true;
     this._refreshYaml();
   }
 
@@ -293,10 +345,11 @@ class ElectricityCostCardEditor extends HTMLElement {
       return s;
     }).join('');
 
+    const titleLine = c.title ? `title: ${c.title}\n` : '';
     const yaml =
 `type: custom:electricity-cost-card
 entity: ${c.entity ?? 'sensor.nordpool_kwh_...'}
-hours_ahead: ${c.hours_ahead ?? 6}
+${titleLine}hours_ahead: ${c.hours_ahead ?? 6}
 search_hours: ${c.search_hours ?? 12}
 price_good: ${c.price_good ?? 1.5}
 price_ok: ${c.price_ok ?? 3.0}
@@ -332,10 +385,11 @@ class ElectricityCostCard extends HTMLElement {
     if (!config.entity) throw new Error('electricity-cost-card: entity is required');
     this._config = {
       entity:       config.entity,
+      title:        config.title        ?? null,   // Optional custom title; null = use default
       hours_ahead:  config.hours_ahead  ?? 6,
       search_hours: config.search_hours ?? 12,
-      price_good:   config.price_good   ?? 1.5,  // Good price ceiling (kr/kWh)
-      price_ok:     config.price_ok     ?? 3.0,  // OK/Normal ceiling (kr/kWh)
+      price_good:   config.price_good   ?? 1.5,    // Good price ceiling (kr/kWh)
+      price_ok:     config.price_ok     ?? 3.0,    // OK/Normal ceiling (kr/kWh)
       activities:   config.activities   ?? [],
     };
     this._render();
@@ -484,7 +538,7 @@ class ElectricityCostCard extends HTMLElement {
     }
     if (bestAvg === Infinity) return null;
 
-    const endIdx = Math.min(bestStart + numBlocks - 1, this._today.length - 1);
+    const endIdx = Math.min(bestStart + numBlocks - 1, this._prices.length - 1);
     return {
       avgPrice:  bestAvg,
       costMin:   activity.kwh_min * bestAvg,
@@ -517,15 +571,19 @@ class ElectricityCostCard extends HTMLElement {
     return blocks;
   }
 
-  // Render SVG bar chart + trend line for upcoming blocks.
+  // Render price graph with HTML y-axis labels and SVG bar chart.
+  // Y-axis labels are rendered as HTML so they inherit the HA theme font
+  // automatically, matching the x-axis time labels below the chart.
   _buildGraph(blocks) {
     if (!blocks.length) {
       return '<div style="font-size:11px;color:var(--secondary-text-color);padding:8px 0;">No price data available</div>';
     }
     const prices = blocks.map(b => b.price);
     const maxP   = Math.max(...prices, 0.1);
-    const W = 100, H = 52;
-    const barW   = Math.max(0.8, (W / prices.length) - 0.4);
+    const mid    = maxP / 2;
+    // W/H for the bar area. LEFT is reserved for y-axis labels in the HTML layer.
+    const W = 88, H = 52, LEFT = 14;
+    const barW = Math.max(0.8, (W / prices.length) - 0.4);
 
     const bars = prices.map((p, i) => {
       const bh  = Math.max(2, (p / maxP) * H);
@@ -536,18 +594,35 @@ class ElectricityCostCard extends HTMLElement {
       return `<rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${barW.toFixed(2)}" height="${bh.toFixed(2)}" fill="${col}" opacity="${op}"/>`;
     }).join('');
 
-    // Trend indicator comparing last vs first block
+    // Dashed reference lines at max and mid, solid baseline at 0.
+    const gridLines = `
+      <line x1="0" y1="1"        x2="${W}" y2="1"        stroke="var(--divider-color,#e0e0e0)" stroke-width="0.5" stroke-dasharray="2,2"/>
+      <line x1="0" y1="${H / 2}" x2="${W}" y2="${H / 2}" stroke="var(--divider-color,#e0e0e0)" stroke-width="0.5" stroke-dasharray="2,2"/>
+      <line x1="0" y1="${H}"     x2="${W}" y2="${H}"     stroke="var(--divider-color,#e0e0e0)" stroke-width="0.5"/>`;
+
     const diff       = prices[prices.length - 1] - prices[0];
     const trendSym   = diff > 0.05 ? '↑' : diff < -0.05 ? '↓' : '→';
     const trendColor = diff > 0.05 ? '#E24B4A' : diff < -0.05 ? '#639922' : '#888780';
     const lastPrice  = this._fmt(prices[prices.length - 1]);
 
+    // Y-axis labels as HTML — inherits HA theme font identically to x-axis spans.
     return `
-      <svg width="100%" viewBox="0 0 100 52" preserveAspectRatio="none" style="height:52px;display:block;">${bars}</svg>
-      <div style="display:flex;justify-content:space-between;margin-top:3px;">
-        <span style="font-size:10px;color:var(--secondary-text-color)">${blocks[0].time}</span>
-        <span style="font-size:11px;font-weight:500;color:${trendColor}">${trendSym} ${lastPrice} kr/kWh</span>
-        <span style="font-size:10px;color:var(--secondary-text-color)">${blocks[blocks.length - 1].time}</span>
+      <div style="position:relative;">
+        <div style="position:absolute;left:0;top:0;bottom:16px;display:flex;flex-direction:column;justify-content:space-between;text-align:right;width:${LEFT}px;">
+          <span style="font-size:10px;color:var(--secondary-text-color);line-height:1">${this._fmt(maxP)}</span>
+          <span style="font-size:10px;color:var(--secondary-text-color);line-height:1">${this._fmt(mid)}</span>
+          <span style="font-size:10px;color:var(--secondary-text-color);line-height:1">0</span>
+        </div>
+        <div style="margin-left:${LEFT + 3}px;overflow:hidden;">
+          <svg width="100%" viewBox="0 0 ${W} ${H + 2}" preserveAspectRatio="none" style="height:54px;display:block;">
+            ${gridLines}${bars}
+          </svg>
+          <div style="display:flex;justify-content:space-between;margin-top:3px;">
+            <span style="font-size:10px;color:var(--secondary-text-color)">${blocks[0].time}</span>
+            <span style="font-size:11px;font-weight:500;color:${trendColor}">${trendSym} ${lastPrice} kr/kWh</span>
+            <span style="font-size:10px;color:var(--secondary-text-color)">${blocks[blocks.length - 1].time}</span>
+          </div>
+        </div>
       </div>`;
   }
 
@@ -567,7 +642,7 @@ class ElectricityCostCard extends HTMLElement {
       ? `${activity.kwh_min} kWh`
       : `${activity.kwh_min}–${activity.kwh_max} kWh`;
 
-  // ── Simple mode: no duration_hours ────────────────────────────────────
+    // ── Simple mode: no duration_hours ────────────────────────────────────
     if (!activity.duration_hours) {
       // Use sim price if active, otherwise live price.
       // Never fall back to a hardcoded default — if we have no price yet,
@@ -702,7 +777,7 @@ class ElectricityCostCard extends HTMLElement {
     if (!this._config.entity) return;
 
     // Don't render meaningful data until we have a real price from HA.
-    const hasPrice = this._livePrice !== null || this._simPrice !== null;
+    const hasPrice     = this._livePrice !== null || this._simPrice !== null;
     const price        = this._simPrice !== null ? this._simPrice : (this._livePrice ?? 0);
     const isSimulating = this._simPrice !== null;
     const status       = this._priceStatus(price);
@@ -712,6 +787,8 @@ class ElectricityCostCard extends HTMLElement {
     const graph        = this._buildGraph(upcomingBlocks);
     const activities   = this._config.activities.map(a => this._renderActivity(a)).join('');
     const timeNow      = new Date().toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
+    // Use configured title or fall back to default
+    const cardTitle    = this._config.title || 'Electricity cost';
 
     this.shadowRoot.innerHTML = `
       <style>
@@ -813,7 +890,7 @@ class ElectricityCostCard extends HTMLElement {
       </style>
 
       <ha-card>
-        <div class="card-title">Electricity cost</div>
+        <div class="card-title">${cardTitle}</div>
 
         <div class="header">
           <div class="price-row">
