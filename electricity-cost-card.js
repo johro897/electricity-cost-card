@@ -8,11 +8,15 @@
 //   • Cheapest window within search_hours, crossing midnight if needed
 //
 // Required sensor attributes:
-//   state     — current price (kr/kWh)
+//   state     — current price (currency/kWh)
 //   today     — list of 96 × 15-minute price blocks for today
 //   tomorrow  — list of 15-minute price blocks for tomorrow (available ~13:00)
 //               When present, today+tomorrow are merged so graphs and best-
 //               window searches cross midnight seamlessly.
+//
+// Optional sensor attributes (auto-detected if present):
+//   currency  — ISO code (e.g. "SEK", "EUR") used to pick a display symbol
+//   unit      — energy unit (e.g. "kWh")
 //
 // YAML config example:
 //   type: custom:electricity-cost-card
@@ -20,8 +24,20 @@
 //   title: My electricity cost   — optional, defaults to "Electricity cost"
 //   hours_ahead: 6               — how many hours the price graph covers
 //   search_hours: 12             — how far ahead to search for the best activity window
-//   price_good: 1.5              — price ceiling (kr/kWh) for "Good price" badge
-//   price_ok: 3.0                — price ceiling (kr/kWh) for "Normal" badge; above = "High price"
+//   price_good: 1.5              — price ceiling (currency/kWh) for "Good price" badge
+//   price_ok: 3.0                — price ceiling (currency/kWh) for "Normal" badge; above = "High price"
+//   currency: "kr"                — optional. Suffix shown after prices, e.g. "kr", "€", "$".
+//                                    If omitted, auto-detected from the sensor's `currency`
+//                                    attribute (Nordpool sets this to an ISO code like SEK/EUR)
+//                                    and mapped to a symbol. Falls back to "kr" if unavailable.
+//   unit: "kWh"                   — optional. Suffix shown after currency, e.g. "kr/kWh".
+//                                    Auto-detected from the sensor's `unit` attribute, falls
+//                                    back to "kWh".
+//   price_max: 5.0                — optional. Top of the price gauge/slider. Defaults to
+//                                    price_ok × 5/3 (price_ok=3.0 → 5.0, the original scale).
+//                                    Set explicitly for currencies with a different typical
+//                                    range, e.g. price_max: 0.6 for EUR dynamic prices.
+//   price_min: 0                  — optional. Bottom of the price gauge/slider. Default 0.
 //   activities:
 //     - name: Dishwasher
 //       icon: "🍽️"
@@ -100,7 +116,7 @@ class ElectricityCostCardEditor extends HTMLElement {
 
   _updateRoot(field, value) {
     const intFields   = ['hours_ahead', 'search_hours'];
-    const floatFields = ['price_good', 'price_ok'];
+    const floatFields = ['price_good', 'price_ok', 'price_max', 'price_min'];
     let parsed = value;
     if (intFields.includes(field))   parsed = parseInt(value);
     if (floatFields.includes(field)) parsed = parseFloat(value);
@@ -125,6 +141,10 @@ class ElectricityCostCardEditor extends HTMLElement {
     set('search-input',     c.search_hours ?? 12);
     set('price-good-input', c.price_good  ?? 1.5);
     set('price-ok-input',   c.price_ok    ?? 3.0);
+    set('currency-input',   c.currency    ?? '');
+    set('unit-input',       c.unit        ?? '');
+    set('price-max-input',  c.price_max   ?? '');
+    set('price-min-input',  c.price_min   ?? 0);
     this._refreshYaml();
   }
 
@@ -160,7 +180,7 @@ class ElectricityCostCardEditor extends HTMLElement {
             <input class="act-field" type="number" step="0.1" min="0.1" data-idx="${i}" data-field="kwh_max" value="${a.kwh_max ?? ''}"/>
           </div>
           <div class="field">
-            <label>Good-price threshold (kr/kWh)</label>
+            <label>Good-price threshold (per kWh)</label>
             <input class="act-field" type="number" step="0.1" min="0.1" data-idx="${i}" data-field="threshold" value="${a.threshold ?? ''}" placeholder="e.g. 1.5"/>
           </div>
           <div class="field">
@@ -185,6 +205,7 @@ class ElectricityCostCardEditor extends HTMLElement {
         }
         input:focus, select:focus { outline: none; border-color: var(--primary-color); }
         .root-grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 10px; }
+        .hint { font-size: 10px; color: var(--secondary-text-color); margin: -4px 0 8px; }
         .act-row {
           background: var(--secondary-background-color, #f5f5f5);
           border-radius: 8px; padding: 12px; margin-bottom: 8px;
@@ -238,12 +259,33 @@ class ElectricityCostCardEditor extends HTMLElement {
           <input id="search-input" type="number" min="1" max="24" value="${c.search_hours ?? 12}"/>
         </div>
         <div class="field">
-          <label>Good price ceiling (kr/kWh)</label>
+          <label>Good price ceiling (per kWh)</label>
           <input id="price-good-input" type="number" step="0.1" min="0.1" value="${c.price_good ?? 1.5}"/>
         </div>
         <div class="field">
-          <label>Normal price ceiling (kr/kWh)</label>
+          <label>Normal price ceiling (per kWh)</label>
           <input id="price-ok-input" type="number" step="0.1" min="0.1" value="${c.price_ok ?? 3.0}"/>
+        </div>
+      </div>
+
+      <div class="section">Advanced (optional)</div>
+      <div class="hint">Leave blank to auto-detect from the sensor, or set explicitly for non-SEK currencies.</div>
+      <div class="root-grid">
+        <div class="field">
+          <label>Currency suffix</label>
+          <input id="currency-input" value="${c.currency ?? ''}" placeholder="auto (kr, €, $...)"/>
+        </div>
+        <div class="field">
+          <label>Unit suffix</label>
+          <input id="unit-input" value="${c.unit ?? ''}" placeholder="auto (kWh)"/>
+        </div>
+        <div class="field">
+          <label>Gauge/slider max price</label>
+          <input id="price-max-input" type="number" step="0.01" min="0.01" value="${c.price_max ?? ''}" placeholder="auto (price_ok × 5/3)"/>
+        </div>
+        <div class="field">
+          <label>Gauge/slider min price</label>
+          <input id="price-min-input" type="number" step="0.01" min="0" value="${c.price_min ?? 0}"/>
         </div>
       </div>
 
@@ -269,6 +311,14 @@ class ElectricityCostCardEditor extends HTMLElement {
       .addEventListener('change', e => this._updateRoot('price_good', e.target.value));
     this.shadowRoot.getElementById('price-ok-input')
       .addEventListener('change', e => this._updateRoot('price_ok', e.target.value));
+    this.shadowRoot.getElementById('currency-input')
+      .addEventListener('change', e => this._updateRoot('currency', e.target.value.trim()));
+    this.shadowRoot.getElementById('unit-input')
+      .addEventListener('change', e => this._updateRoot('unit', e.target.value.trim()));
+    this.shadowRoot.getElementById('price-max-input')
+      .addEventListener('change', e => this._updateRoot('price_max', e.target.value));
+    this.shadowRoot.getElementById('price-min-input')
+      .addEventListener('change', e => this._updateRoot('price_min', e.target.value));
 
     // ── Activity field listeners (delegated) — 'input' is fine here because
     // activity changes do NOT trigger a _render() call.
@@ -345,7 +395,14 @@ class ElectricityCostCardEditor extends HTMLElement {
       return s;
     }).join('');
 
-    const titleLine = c.title ? `title: ${c.title}\n` : '';
+    const titleLine     = c.title ? `title: ${c.title}\n` : '';
+    // Advanced/optional lines — only emitted when explicitly set, so the
+    // default YAML stays minimal and auto-detection keeps working.
+    const currencyLine  = c.currency ? `currency: "${c.currency}"\n` : '';
+    const unitLine       = c.unit ? `unit: "${c.unit}"\n` : '';
+    const priceMaxLine  = c.price_max ? `price_max: ${c.price_max}\n` : '';
+    const priceMinLine  = c.price_min ? `price_min: ${c.price_min}\n` : '';
+
     const yaml =
 `type: custom:electricity-cost-card
 entity: ${c.entity ?? 'sensor.nordpool_kwh_...'}
@@ -353,7 +410,7 @@ ${titleLine}hours_ahead: ${c.hours_ahead ?? 6}
 search_hours: ${c.search_hours ?? 12}
 price_good: ${c.price_good ?? 1.5}
 price_ok: ${c.price_ok ?? 3.0}
-activities:
+${currencyLine}${unitLine}${priceMaxLine}${priceMinLine}activities:
 ${acts}`;
 
     const box = this.shadowRoot.getElementById('yaml-preview');
@@ -368,6 +425,13 @@ customElements.define('electricity-cost-card-editor', ElectricityCostCardEditor)
 // MAIN CARD
 // =============================================================================
 
+// ISO currency code → display symbol. Nordpool's `currency` attribute is an
+// ISO code (SEK, EUR, ...); we map the common ones to the suffix people
+// actually expect to see. Unknown codes are shown as-is rather than guessed.
+const CURRENCY_SYMBOLS = {
+  SEK: 'kr', NOK: 'kr', DKK: 'kr', EUR: '€', GBP: '£', USD: '$',
+};
+
 class ElectricityCostCard extends HTMLElement {
   constructor() {
     super();
@@ -378,6 +442,8 @@ class ElectricityCostCard extends HTMLElement {
     this._today     = [];     // 15-min price blocks for today (96 entries)
     this._tomorrow  = [];     // 15-min price blocks for tomorrow (available from ~13:00)
     this._prices    = [];     // today + tomorrow merged — used for all look-aheads
+    this._sensorCurrency = null; // ISO code read from the sensor's `currency` attribute
+    this._sensorUnit     = null; // Unit read from the sensor's `unit` attribute
   }
 
   // Called by HA when the card config is set or changed.
@@ -388,8 +454,12 @@ class ElectricityCostCard extends HTMLElement {
       title:        config.title        ?? null,   // Optional custom title; null = use default
       hours_ahead:  config.hours_ahead  ?? 6,
       search_hours: config.search_hours ?? 12,
-      price_good:   config.price_good   ?? 1.5,    // Good price ceiling (kr/kWh)
-      price_ok:     config.price_ok     ?? 3.0,    // OK/Normal ceiling (kr/kWh)
+      price_good:   config.price_good   ?? 1.5,    // Good price ceiling (currency/kWh)
+      price_ok:     config.price_ok     ?? 3.0,    // OK/Normal ceiling (currency/kWh)
+      price_min:    config.price_min    ?? 0,      // Bottom of gauge/slider
+      price_max:    config.price_max    ?? null,   // null = auto-derive from price_ok
+      currency:     config.currency     ?? null,   // null = auto-detect from sensor
+      unit:         config.unit         ?? null,   // null = auto-detect from sensor
       activities:   config.activities   ?? [],
     };
     this._render();
@@ -406,6 +476,10 @@ class ElectricityCostCard extends HTMLElement {
     // Merge into a single timeline so all look-ahead logic crosses midnight seamlessly.
     // today has 96 blocks (00:00–23:45), tomorrow appended starts at index 96 (= 00:00 next day).
     this._prices = [...this._today, ...this._tomorrow];
+    // Auto-detection source for currency/unit display — only used when the
+    // card config doesn't explicitly override them.
+    this._sensorCurrency = stateObj.attributes.currency ?? null;
+    this._sensorUnit     = stateObj.attributes.unit     ?? null;
     this._render();
   }
 
@@ -460,6 +534,41 @@ class ElectricityCostCard extends HTMLElement {
     if (v >= 100) return Math.round(v).toString();
     if (v >= 10)  return v.toFixed(1);
     return v.toFixed(2);
+  }
+
+  // Currency suffix shown after price values. Priority:
+  //   1. Explicit `currency` config key
+  //   2. Sensor's `currency` attribute, mapped via CURRENCY_SYMBOLS
+  //   3. Sensor's `currency` attribute as-is (unknown ISO code)
+  //   4. "kr" — preserves the original default when nothing is available
+  _currencySuffix() {
+    if (this._config.currency) return this._config.currency;
+    const raw = this._sensorCurrency;
+    if (raw && CURRENCY_SYMBOLS[raw]) return CURRENCY_SYMBOLS[raw];
+    if (raw) return raw;
+    return 'kr';
+  }
+
+  // Unit suffix shown after the currency (e.g. "kr/kWh"). Same priority as above.
+  _unitSuffix() {
+    return this._config.unit || this._sensorUnit || 'kWh';
+  }
+
+  // Top of the price gauge/slider. If not explicitly configured, auto-scales
+  // from price_ok using the same ratio as the original hardcoded values
+  // (price_ok defaulted to 3.0, gauge topped out at 5.0 → factor 5/3).
+  // This keeps existing SEK dashboards pixel-identical while giving EUR (or
+  // any other currency) a sensibly scaled gauge without any config needed.
+  _priceMax() {
+    const explicit = this._config.price_max;
+    if (explicit && explicit > 0) return explicit;
+    const ok = this._config.price_ok > 0 ? this._config.price_ok : 3.0;
+    return ok * (5 / 3);
+  }
+
+  // Bottom of the price gauge/slider. Default 0.
+  _priceMin() {
+    return this._config.price_min || 0;
   }
 
   // Bar / gauge color based on absolute price level.
@@ -619,7 +728,7 @@ class ElectricityCostCard extends HTMLElement {
           </svg>
           <div style="display:flex;justify-content:space-between;margin-top:3px;">
             <span style="font-size:10px;color:var(--secondary-text-color)">${blocks[0].time}</span>
-            <span style="font-size:11px;font-weight:500;color:${trendColor}">${trendSym} ${lastPrice} kr/kWh</span>
+            <span style="font-size:11px;font-weight:500;color:${trendColor}">${trendSym} ${lastPrice} ${this._currencySuffix()}/${this._unitSuffix()}</span>
             <span style="font-size:10px;color:var(--secondary-text-color)">${blocks[blocks.length - 1].time}</span>
           </div>
         </div>
@@ -630,6 +739,8 @@ class ElectricityCostCard extends HTMLElement {
   // ── Activity rendering ─────────────────────────────────────────────────────
 
   _renderActivity(activity) {
+    const currency = this._currencySuffix();
+
     // Icon background colors keyed by emoji
     const iconColors = {
       '🍽️': '#EEEDFE', '👕': '#EAF3DE', '🚿': '#E6F1FB', '🔋': '#FAEEDA',
@@ -662,8 +773,8 @@ class ElectricityCostCard extends HTMLElement {
       const cMin    = activity.kwh_min * price;
       const cMax    = activity.kwh_max * price;
       const costStr = activity.kwh_min === activity.kwh_max
-        ? `${this._fmt(cMin)} kr`
-        : `${this._fmt(cMin)}–${this._fmt(cMax)} kr`;
+        ? `${this._fmt(cMin)} ${currency}`
+        : `${this._fmt(cMin)}–${this._fmt(cMax)} ${currency}`;
       const rec = this._simpleRec(price, activity.threshold ?? 1.5);
 
       return `
@@ -693,8 +804,8 @@ class ElectricityCostCard extends HTMLElement {
       const cMin    = activity.kwh_min * price;
       const cMax    = activity.kwh_max * price;
       const costStr = activity.kwh_min === activity.kwh_max
-        ? `${this._fmt(cMin)} kr`
-        : `${this._fmt(cMin)}–${this._fmt(cMax)} kr`;
+        ? `${this._fmt(cMin)} ${currency}`
+        : `${this._fmt(cMin)}–${this._fmt(cMax)} ${currency}`;
       const rec = this._simpleRec(price, activity.threshold ?? 1.5);
       const durLabel = `${kwhStr} · ${activity.duration_hours}h`;
       return `
@@ -719,8 +830,8 @@ class ElectricityCostCard extends HTMLElement {
     // Cost string for running NOW
     const nowStr = nowCost
       ? (activity.kwh_min === activity.kwh_max
-          ? `${this._fmt(nowCost.costMin)} kr`
-          : `${this._fmt(nowCost.costMin)}–${this._fmt(nowCost.costMax)} kr`)
+          ? `${this._fmt(nowCost.costMin)} ${currency}`
+          : `${this._fmt(nowCost.costMin)}–${this._fmt(nowCost.costMax)} ${currency}`)
       : '–';
 
     // Recommendation badge uses the same threshold logic as simple activities,
@@ -744,8 +855,8 @@ class ElectricityCostCard extends HTMLElement {
     // Best-window row shown below the main row (only when best is later)
     const bestRowHtml = (best && !best.isNow) ? (() => {
       const bestStr = activity.kwh_min === activity.kwh_max
-        ? `${this._fmt(best.costMin)} kr`
-        : `${this._fmt(best.costMin)}–${this._fmt(best.costMax)} kr`;
+        ? `${this._fmt(best.costMin)} ${currency}`
+        : `${this._fmt(best.costMin)}–${this._fmt(best.costMax)} ${currency}`;
       return `
         <div class="best-row">
           <span class="best-label"><span class="best-dot"></span>Best ${best.startTime}–${best.endTime}</span>
@@ -781,7 +892,11 @@ class ElectricityCostCard extends HTMLElement {
     const price        = this._simPrice !== null ? this._simPrice : (this._livePrice ?? 0);
     const isSimulating = this._simPrice !== null;
     const status       = this._priceStatus(price);
-    const gaugePct     = Math.min(97, Math.max(3, (price / 5) * 100));
+    const currency     = this._currencySuffix();
+    const unit         = this._unitSuffix();
+    const priceMax     = this._priceMax();
+    const priceMin     = this._priceMin();
+    const gaugePct     = Math.min(97, Math.max(3, ((price - priceMin) / (priceMax - priceMin)) * 100));
     const gaugeColor   = this._priceColor(price);
     const upcomingBlocks = this._getUpcomingBlocks();
     const graph        = this._buildGraph(upcomingBlocks);
@@ -895,7 +1010,7 @@ class ElectricityCostCard extends HTMLElement {
         <div class="header">
           <div class="price-row">
             <span class="price-value">${hasPrice ? price.toFixed(2) : '–'}</span>
-            <span class="price-unit">kr/kWh</span>
+            <span class="price-unit">${currency}/${unit}</span>
             ${isSimulating ? '<span class="sim-tag">SIMULATION</span>' : ''}
           </div>
           <span class="badge ${hasPrice ? status.cls : 'ok'}">
@@ -906,10 +1021,14 @@ class ElectricityCostCard extends HTMLElement {
         <div class="gauge-track">
           <div class="gauge-fill" style="width:${gaugePct}%;background:${gaugeColor};"></div>
         </div>
-        <div class="gauge-labels"><span>0 kr</span><span>2.5 kr</span><span>5 kr</span></div>
+        <div class="gauge-labels">
+          <span>${this._fmt(priceMin)} ${currency}</span>
+          <span>${this._fmt((priceMin + priceMax) / 2)} ${currency}</span>
+          <span>${this._fmt(priceMax)} ${currency}</span>
+        </div>
 
         <div class="slider-row">
-          <input type="range" id="price-slider" min="0.10" max="5.00" step="0.01" value="${price.toFixed(2)}"/>
+          <input type="range" id="price-slider" min="${priceMin.toFixed(2)}" max="${priceMax.toFixed(2)}" step="0.01" value="${price.toFixed(2)}"/>
           ${isSimulating ? '<button class="reset-btn" id="reset-btn">↺ Live</button>' : ''}
         </div>
 
