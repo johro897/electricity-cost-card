@@ -234,14 +234,14 @@ All configuration lives in the dashboard YAML (`ui-lovelace.yaml` or the `.stora
 
 ## Changelog
 
-### v1.1
+### v2.1
 - **New:** `currency` config key — set an explicit price suffix, or let the card auto-detect it from the sensor's `currency` attribute
 - **New:** `unit` config key — same auto-detection pattern for the energy unit
 - **New:** `price_max` / `price_min` config keys — the gauge and simulation slider now scale to your market's price range instead of a fixed 0–5 kr. Default `price_max` is derived from `price_ok × 5/3`, preserving the original scale for existing SEK dashboards
 - **Note:** the simulation slider's default minimum changed from a hardcoded `0.10` to `0` (override with `price_min` if you need a different floor)
 - No breaking changes — existing configs continue to work unchanged
 
-### v1.0
+### v2.0
 - Initial release
 
 
