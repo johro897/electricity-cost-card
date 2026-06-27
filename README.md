@@ -31,7 +31,7 @@ A Home Assistant custom card that displays real-time electricity pricing from No
 
 ### 1. Via HACS (recommended)
 
-This card is not yet listed in the default HACS catalog. You can add it as a custom repository by clicking the button below (requires [My Home Assistant](https://my.home-assistant.io/) to be configured). HACS will ask you to confirm adding a custom repository — accept and then locate **Electricity Cost Card** under **Frontend** to install it.
+Electricity Cost Card is available directly in the HACS default catalog. Search for **Electricity Cost Card** under **Frontend** in HACS and install it — no custom repository needed.
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=johro897&repository=electricity-cost-card&category=dashboard)
 
