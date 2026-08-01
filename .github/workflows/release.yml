@@ -1,11 +1,12 @@
 name: Release
+
 on:
-  push:
-    tags: ['v*']
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag att skapa (t.ex. v1.3.0)'
+        description: 'Tagg att bifoga filen till (t.ex. 2.2)'
         required: true
 
 permissions:
@@ -16,7 +17,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.event.release.tag_name }}
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          tag_name: ${{ github.event.inputs.tag || github.event.release.tag_name }}
           files: electricity-cost-card.js
