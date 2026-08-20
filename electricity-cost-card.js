@@ -53,6 +53,15 @@
 // =============================================================================
 
 
+function escHtml(str) {
+  if (str === undefined || str === null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 // =============================================================================
 // VISUAL EDITOR
 // Registered via getConfigElement() — HA shows this automatically when the
@@ -120,6 +129,14 @@ class ElectricityCostCardEditor extends HTMLElement {
     let parsed = value;
     if (intFields.includes(field))   parsed = parseInt(value);
     if (floatFields.includes(field)) parsed = parseFloat(value);
+    // A cleared/invalid numeric field parses to NaN — fall back to null
+    // instead of writing NaN into config. setConfig() already treats null
+    // as "use the documented default" for every one of these fields
+    // (e.g. `config.hours_ahead ?? 6`), so this reuses that existing
+    // fallback rather than needing a separate one here.
+    if ((intFields.includes(field) || floatFields.includes(field)) && Number.isNaN(parsed)) {
+      parsed = null;
+    }
     this._config = { ...this._config, [field]: parsed };
     this._dispatch();
     // Never call _render() here — doing so would steal focus from the active input.
@@ -157,13 +174,13 @@ class ElectricityCostCardEditor extends HTMLElement {
     const activityRows = acts.map((a, i) => `
       <div class="act-row">
         <div class="act-row-header">
-          <span class="act-row-title">${a.name || 'Activity ' + (i + 1)}</span>
+          <span class="act-row-title">${escHtml(a.name || 'Activity ' + (i + 1))}</span>
           <button class="remove-btn" data-idx="${i}">Remove</button>
         </div>
         <div class="field-grid">
           <div class="field">
             <label>Name</label>
-            <input class="act-field" data-idx="${i}" data-field="name" value="${a.name ?? ''}" placeholder="e.g. Dishwasher"/>
+            <input class="act-field" data-idx="${i}" data-field="name" value="${escHtml(a.name ?? '')}" placeholder="e.g. Dishwasher"/>
           </div>
           <div class="field">
             <label>Icon</label>
@@ -248,7 +265,7 @@ class ElectricityCostCardEditor extends HTMLElement {
         </div>
         <div class="field" style="grid-column:1/-1">
           <label>Card title (optional)</label>
-          <input id="title-input" value="${c.title ?? ''}" placeholder="Electricity cost"/>
+          <input id="title-input" value="${escHtml(c.title ?? '')}" placeholder="Electricity cost"/>
         </div>
         <div class="field">
           <label>Graph: hours ahead</label>
@@ -444,6 +461,7 @@ class ElectricityCostCard extends HTMLElement {
     this._prices    = [];     // today + tomorrow merged — used for all look-aheads
     this._sensorCurrency = null; // ISO code read from the sensor's `currency` attribute
     this._sensorUnit     = null; // Unit read from the sensor's `unit` attribute
+    this._renderRaf = null;      // Pending animation-frame handle for throttled slider re-renders
   }
 
   // Called by HA when the card config is set or changed.
@@ -467,9 +485,15 @@ class ElectricityCostCard extends HTMLElement {
 
   // Called by HA every time any entity state changes.
   set hass(hass) {
+    // HA guarantees hass.states[id] keeps the same object reference unless
+    // that specific entity's state/attributes actually changed — so a
+    // reference check tells us whether a re-render is needed, no need to
+    // diff state/attributes by value.
+    const prevStateObj = this._hass?.states?.[this._config.entity];
     this._hass = hass;
     const stateObj = hass.states[this._config.entity];
     if (!stateObj) return;
+    if (stateObj === prevStateObj) return;
     this._livePrice = parseFloat(stateObj.state);
     this._today     = stateObj.attributes.today    ?? [];
     this._tomorrow  = stateObj.attributes.tomorrow ?? [];
@@ -573,10 +597,10 @@ class ElectricityCostCard extends HTMLElement {
 
   // Bar / gauge color based on absolute price level.
   _priceColor(p) {
-    if (p <= 1.0) return '#639922'; // green
-    if (p <= 2.0) return '#BA7517'; // amber
-    if (p <= 3.0) return '#E24B4A'; // red
-    return '#A32D2D';               // dark red
+    if (p <= 1.0) return 'var(--success-color, #639922)'; // green
+    if (p <= 2.0) return 'var(--warning-color, #BA7517)'; // amber
+    if (p <= 3.0) return 'var(--error-color, #E24B4A)';   // red
+    return '#A32D2D';                                     // dark red — beyond HA's error tier, no matching theme var
   }
 
   // Overall status badge — uses price_good / price_ok from root config.
@@ -698,7 +722,7 @@ class ElectricityCostCard extends HTMLElement {
       const bh  = Math.max(2, (p / maxP) * H);
       const x   = (i / prices.length) * W;
       const y   = H - bh;
-      const col = blocks[i].isCurrent ? '#185FA5' : this._priceColor(p);
+      const col = blocks[i].isCurrent ? 'var(--primary-color, #185FA5)' : this._priceColor(p);
       const op  = blocks[i].isCurrent ? '1' : '0.6';
       return `<rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${barW.toFixed(2)}" height="${bh.toFixed(2)}" fill="${col}" opacity="${op}"/>`;
     }).join('');
@@ -711,7 +735,7 @@ class ElectricityCostCard extends HTMLElement {
 
     const diff       = prices[prices.length - 1] - prices[0];
     const trendSym   = diff > 0.05 ? '↑' : diff < -0.05 ? '↓' : '→';
-    const trendColor = diff > 0.05 ? '#E24B4A' : diff < -0.05 ? '#639922' : '#888780';
+    const trendColor = diff > 0.05 ? 'var(--error-color, #E24B4A)' : diff < -0.05 ? 'var(--success-color, #639922)' : 'var(--secondary-text-color, #888780)';
     const lastPrice  = this._fmt(prices[prices.length - 1]);
 
     // Y-axis labels as HTML — inherits HA theme font identically to x-axis spans.
@@ -761,9 +785,9 @@ class ElectricityCostCard extends HTMLElement {
       if (this._livePrice === null && this._simPrice === null) {
         return `
           <div class="activity">
-            <div class="activity-icon" style="background:${iconBg}">${activity.icon}</div>
+            <div class="activity-icon" style="background:${iconBg}">${escHtml(activity.icon || '')}</div>
             <div class="activity-info">
-              <div class="activity-name">${activity.name}</div>
+              <div class="activity-name">${escHtml(activity.name || '')}</div>
               <div class="activity-sub">${kwhStr}</div>
             </div>
             <div class="activity-right" style="color:var(--secondary-text-color);font-size:12px;">Loading…</div>
@@ -779,9 +803,9 @@ class ElectricityCostCard extends HTMLElement {
 
       return `
         <div class="activity">
-          <div class="activity-icon" style="background:${iconBg}">${activity.icon}</div>
+          <div class="activity-icon" style="background:${iconBg}">${escHtml(activity.icon || '')}</div>
           <div class="activity-info">
-            <div class="activity-name">${activity.name}</div>
+            <div class="activity-name">${escHtml(activity.name || '')}</div>
             <div class="activity-sub">${kwhStr}</div>
           </div>
           <div class="activity-right">
@@ -810,9 +834,9 @@ class ElectricityCostCard extends HTMLElement {
       const durLabel = `${kwhStr} · ${activity.duration_hours}h`;
       return `
         <div class="activity">
-          <div class="activity-icon" style="background:${iconBg}">${activity.icon}</div>
+          <div class="activity-icon" style="background:${iconBg}">${escHtml(activity.icon || '')}</div>
           <div class="activity-info">
-            <div class="activity-name">${activity.name}</div>
+            <div class="activity-name">${escHtml(activity.name || '')}</div>
             <div class="activity-sub">${durLabel}</div>
           </div>
           <div class="activity-right">
@@ -867,9 +891,9 @@ class ElectricityCostCard extends HTMLElement {
     return `
       <div class="activity-dur">
         <div class="activity">
-          <div class="activity-icon" style="background:${iconBg}">${activity.icon}</div>
+          <div class="activity-icon" style="background:${iconBg}">${escHtml(activity.icon || '')}</div>
           <div class="activity-info">
-            <div class="activity-name">${activity.name}</div>
+            <div class="activity-name">${escHtml(activity.name || '')}</div>
             <div class="activity-sub">${durLabel}</div>
           </div>
           <div class="activity-right">
@@ -881,6 +905,48 @@ class ElectricityCostCard extends HTMLElement {
       </div>`;
   }
 
+
+  // ── Live-patch during slider drag ───────────────────────────────────────────
+  // Updates only the price-dependent nodes in place — never touches
+  // #price-slider itself, so dragging isn't interrupted (see the "input"
+  // listener below for why a full _render() during drag breaks dragging).
+  _patchSimulatedPrice() {
+    if (!this.shadowRoot.querySelector('.price-value')) { this._render(); return; }
+
+    const hasPrice     = this._livePrice !== null || this._simPrice !== null;
+    const price        = this._simPrice !== null ? this._simPrice : (this._livePrice ?? 0);
+    const isSimulating = this._simPrice !== null;
+    const status       = this._priceStatus(price);
+    const priceMax     = this._priceMax();
+    const priceMin     = this._priceMin();
+    const gaugePct     = Math.min(97, Math.max(3, ((price - priceMin) / (priceMax - priceMin)) * 100));
+    const gaugeColor   = this._priceColor(price);
+
+    const priceValueEl = this.shadowRoot.querySelector('.price-value');
+    if (priceValueEl) priceValueEl.textContent = hasPrice ? price.toFixed(2) : '–';
+
+    const simTagEl = this.shadowRoot.getElementById('sim-tag');
+    if (simTagEl) simTagEl.style.display = isSimulating ? '' : 'none';
+
+    const badgeEl = this.shadowRoot.querySelector('.badge');
+    if (badgeEl) badgeEl.className = `badge ${hasPrice ? status.cls : 'ok'}`;
+    const badgeLabelEl = this.shadowRoot.querySelector('.badge-label');
+    if (badgeLabelEl) badgeLabelEl.textContent = hasPrice ? status.label : 'Loading…';
+
+    const gaugeFillEl = this.shadowRoot.querySelector('.gauge-fill');
+    if (gaugeFillEl) {
+      gaugeFillEl.style.width = `${gaugePct}%`;
+      gaugeFillEl.style.background = gaugeColor;
+    }
+
+    const resetBtnEl = this.shadowRoot.getElementById('reset-btn');
+    if (resetBtnEl) resetBtnEl.style.display = isSimulating ? '' : 'none';
+
+    const activitiesEl = this.shadowRoot.querySelector('.activities');
+    if (activitiesEl) {
+      activitiesEl.innerHTML = this._config.activities.map(a => this._renderActivity(a)).join('');
+    }
+  }
 
   // ── Main render ────────────────────────────────────────────────────────────
 
@@ -903,7 +969,7 @@ class ElectricityCostCard extends HTMLElement {
     const activities   = this._config.activities.map(a => this._renderActivity(a)).join('');
     const timeNow      = new Date().toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
     // Use configured title or fall back to default
-    const cardTitle    = this._config.title || 'Electricity cost';
+    const cardTitle    = escHtml(this._config.title || 'Electricity cost');
 
     this.shadowRoot.innerHTML = `
       <style>
@@ -918,19 +984,19 @@ class ElectricityCostCard extends HTMLElement {
         .price-row { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
         .price-value { font-size: 36px; font-weight: 400; color: var(--primary-text-color); line-height: 1; }
         .price-unit  { font-size: 14px; color: var(--secondary-text-color); }
-        .sim-tag { font-size: 10px; font-weight: 500; background: #FAEEDA; color: #854F0B;
+        .sim-tag { font-size: 10px; font-weight: 500; background: rgba(var(--rgb-warning-color, 244,185,66), 0.18); color: var(--warning-color, #854F0B);
                    padding: 2px 8px; border-radius: 10px; }
 
         /* ── Status badge ── */
         .badge { display: inline-flex; align-items: center; gap: 5px; padding: 5px 11px;
                  border-radius: 20px; font-size: 12px; font-weight: 500; flex-shrink: 0; }
-        .badge.good { background: #EAF3DE; color: #27500A; }
-        .badge.ok   { background: #FAEEDA; color: #633806; }
-        .badge.bad  { background: #FCEBEB; color: #791F1F; }
+        .badge.good { background: rgba(var(--rgb-success-color, 99,153,34), 0.18); color: var(--success-color, #27500A); }
+        .badge.ok   { background: rgba(var(--rgb-warning-color, 244,185,66), 0.18); color: var(--warning-color, #633806); }
+        .badge.bad  { background: rgba(var(--rgb-error-color, 226,75,74), 0.18); color: var(--error-color, #791F1F); }
         .badge-dot  { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
-        .badge.good .badge-dot { background: #639922; }
-        .badge.ok   .badge-dot { background: #BA7517; }
-        .badge.bad  .badge-dot { background: #E24B4A; }
+        .badge.good .badge-dot { background: var(--success-color, #639922); }
+        .badge.ok   .badge-dot { background: var(--warning-color, #BA7517); }
+        .badge.bad  .badge-dot { background: var(--error-color, #E24B4A); }
 
         /* ── Gauge ── */
         .gauge-track  { height: 5px; border-radius: 3px; background: var(--divider-color, #e0e0e0);
@@ -977,16 +1043,16 @@ class ElectricityCostCard extends HTMLElement {
         /* Recommendation row */
         .rec { display: flex; align-items: center; gap: 4px; justify-content: flex-end;
                font-size: 10px; font-weight: 500; margin-top: 3px; }
-        .rec.rec-good { color: #27500A; }
-        .rec.rec-ok   { color: #633806; }
-        .rec.rec-bad  { color: #791F1F; }
+        .rec.rec-good { color: var(--success-color, #27500A); }
+        .rec.rec-ok   { color: var(--warning-color, #633806); }
+        .rec.rec-bad  { color: var(--error-color, #791F1F); }
         .rec-dot  { width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
-        .rdot-good { background: #639922; }
-        .rdot-ok   { background: #BA7517; }
-        .rdot-bad  { background: #E24B4A; }
+        .rdot-good { background: var(--success-color, #639922); }
+        .rdot-ok   { background: var(--warning-color, #BA7517); }
+        .rdot-bad  { background: var(--error-color, #E24B4A); }
 
         /* Savings badge (green pill) */
-        .save-badge { font-size: 10px; font-weight: 500; color: #27500A; background: #EAF3DE;
+        .save-badge { font-size: 10px; font-weight: 500; color: var(--success-color, #27500A); background: rgba(var(--rgb-success-color, 99,153,34), 0.18);
                       padding: 2px 7px; border-radius: 10px; margin-top: 3px; display: inline-block; }
 
         /* Best-window sub-row */
@@ -994,10 +1060,10 @@ class ElectricityCostCard extends HTMLElement {
                      padding: 5px 11px 7px 55px; background: var(--secondary-background-color);
                      border-top: 0.5px solid var(--divider-color, #e0e0e0); }
         .best-label { display: flex; align-items: center; gap: 5px;
-                      font-size: 11px; color: #27500A; font-weight: 500; }
-        .best-dot   { width: 6px; height: 6px; border-radius: 50%; background: #639922;
+                      font-size: 11px; color: var(--success-color, #27500A); font-weight: 500; }
+        .best-dot   { width: 6px; height: 6px; border-radius: 50%; background: var(--success-color, #639922);
                       display: inline-block; flex-shrink: 0; }
-        .best-cost  { font-size: 11px; font-weight: 500; color: #27500A; }
+        .best-cost  { font-size: 11px; font-weight: 500; color: var(--success-color, #27500A); }
 
         /* ── Footer ── */
         .divider { height: 1px; background: var(--divider-color, #e0e0e0); margin: 14px 0; }
@@ -1011,10 +1077,10 @@ class ElectricityCostCard extends HTMLElement {
           <div class="price-row">
             <span class="price-value">${hasPrice ? price.toFixed(2) : '–'}</span>
             <span class="price-unit">${currency}/${unit}</span>
-            ${isSimulating ? '<span class="sim-tag">SIMULATION</span>' : ''}
+            <span class="sim-tag" id="sim-tag" role="status" aria-live="polite" style="display:${isSimulating ? '' : 'none'}">SIMULATION</span>
           </div>
           <span class="badge ${hasPrice ? status.cls : 'ok'}">
-            <span class="badge-dot"></span>${hasPrice ? status.label : 'Loading…'}
+            <span class="badge-dot"></span><span class="badge-label">${hasPrice ? status.label : 'Loading…'}</span>
           </span>
         </div>
 
@@ -1028,8 +1094,8 @@ class ElectricityCostCard extends HTMLElement {
         </div>
 
         <div class="slider-row">
-          <input type="range" id="price-slider" min="${priceMin.toFixed(2)}" max="${priceMax.toFixed(2)}" step="0.01" value="${price.toFixed(2)}"/>
-          ${isSimulating ? '<button class="reset-btn" id="reset-btn">↺ Live</button>' : ''}
+          <input type="range" id="price-slider" aria-label="Simulate price" min="${priceMin.toFixed(2)}" max="${priceMax.toFixed(2)}" step="0.01" value="${price.toFixed(2)}"/>
+          <button class="reset-btn" id="reset-btn" style="display:${isSimulating ? '' : 'none'}">↺ Live</button>
         </div>
 
         <div class="section-label">Next ${this._config.hours_ahead} hours</div>
@@ -1048,7 +1114,18 @@ class ElectricityCostCard extends HTMLElement {
       slider.addEventListener('input', e => {
         const v = parseFloat(e.target.value);
         this._simPrice = Math.abs(v - (this._livePrice ?? v)) > 0.01 ? v : null;
-        this._render();
+        // Patch just the price-dependent DOM nodes instead of calling the full
+        // _render() (which replaces shadowRoot.innerHTML wholesale, destroying
+        // and recreating #price-slider itself). Doing that while the user's
+        // pointer is actively dragging the slider breaks the browser's native
+        // drag tracking on that element — the slider would only "jump" on
+        // click instead of dragging smoothly. Collapsed to at most one patch
+        // per animation frame, same throttling as before.
+        if (this._renderRaf) return;
+        this._renderRaf = requestAnimationFrame(() => {
+          this._renderRaf = null;
+          this._patchSimulatedPrice();
+        });
       });
     }
 
