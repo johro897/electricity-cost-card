@@ -444,6 +444,7 @@ class ElectricityCostCard extends HTMLElement {
     this._prices    = [];     // today + tomorrow merged — used for all look-aheads
     this._sensorCurrency = null; // ISO code read from the sensor's `currency` attribute
     this._sensorUnit     = null; // Unit read from the sensor's `unit` attribute
+    this._renderRaf = null;      // Pending animation-frame handle for throttled slider re-renders
   }
 
   // Called by HA when the card config is set or changed.
@@ -467,9 +468,15 @@ class ElectricityCostCard extends HTMLElement {
 
   // Called by HA every time any entity state changes.
   set hass(hass) {
+    // HA guarantees hass.states[id] keeps the same object reference unless
+    // that specific entity's state/attributes actually changed — so a
+    // reference check tells us whether a re-render is needed, no need to
+    // diff state/attributes by value.
+    const prevStateObj = this._hass?.states?.[this._config.entity];
     this._hass = hass;
     const stateObj = hass.states[this._config.entity];
     if (!stateObj) return;
+    if (stateObj === prevStateObj) return;
     this._livePrice = parseFloat(stateObj.state);
     this._today     = stateObj.attributes.today    ?? [];
     this._tomorrow  = stateObj.attributes.tomorrow ?? [];
@@ -1048,7 +1055,14 @@ class ElectricityCostCard extends HTMLElement {
       slider.addEventListener('input', e => {
         const v = parseFloat(e.target.value);
         this._simPrice = Math.abs(v - (this._livePrice ?? v)) > 0.01 ? v : null;
-        this._render();
+        // Collapse rapid drag ticks into at most one full re-render per animation
+        // frame instead of one per native "input" event (which can fire far more
+        // often than the display refreshes on some pointer devices).
+        if (this._renderRaf) return;
+        this._renderRaf = requestAnimationFrame(() => {
+          this._renderRaf = null;
+          this._render();
+        });
       });
     }
 

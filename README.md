@@ -234,6 +234,11 @@ All configuration lives in the dashboard YAML (`ui-lovelace.yaml` or the `.stora
 
 ## Changelog
 
+### v2.4
+**Performance** — [#10](https://github.com/johro897/electricity-cost-card/issues/10)
+- The card now only re-renders when the Nordpool sensor's state actually changes, instead of on every Home Assistant state change anywhere in the install
+- Dragging the price simulation slider now re-renders at most once per animation frame instead of on every native input event, so a fast drag no longer triggers a burst of full re-renders
+
 ### v2.1
 - **New:** `currency` config key — set an explicit price suffix, or let the card auto-detect it from the sensor's `currency` attribute
 - **New:** `unit` config key — same auto-detection pattern for the energy unit
