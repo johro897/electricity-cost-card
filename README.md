@@ -234,6 +234,14 @@ All configuration lives in the dashboard YAML (`ui-lovelace.yaml` or the `.stora
 
 ## Changelog
 
+### v2.6
+**Accessibility & theming** — [#11](https://github.com/johro897/electricity-cost-card/issues/11)
+- Status colors (price badge, recommendation dots, gauge/graph fill, best-window highlight, savings badge) now use HA's `--success-color`/`--warning-color`/`--error-color` theme variables instead of fixed hex values, so they adapt to dark and custom themes
+- Clearing a numeric editor field (search hours, price thresholds, etc.) no longer writes `NaN` into the config — it now falls back to the documented default, same as omitting the field entirely
+- The price simulation slider now has an `aria-label`, and the "SIMULATION" tag is marked as a live region for screen readers
+
+Activity icon background colors were intentionally left as-is — they're purely decorative variety between icon types, not a status indicator, and collapsing them to a single theme color would lose that distinction without a way to verify the visual result.
+
 ### v2.1
 - **New:** `currency` config key — set an explicit price suffix, or let the card auto-detect it from the sensor's `currency` attribute
 - **New:** `unit` config key — same auto-detection pattern for the energy unit

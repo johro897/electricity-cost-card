@@ -120,6 +120,14 @@ class ElectricityCostCardEditor extends HTMLElement {
     let parsed = value;
     if (intFields.includes(field))   parsed = parseInt(value);
     if (floatFields.includes(field)) parsed = parseFloat(value);
+    // A cleared/invalid numeric field parses to NaN — fall back to null
+    // instead of writing NaN into config. setConfig() already treats null
+    // as "use the documented default" for every one of these fields
+    // (e.g. `config.hours_ahead ?? 6`), so this reuses that existing
+    // fallback rather than needing a separate one here.
+    if ((intFields.includes(field) || floatFields.includes(field)) && Number.isNaN(parsed)) {
+      parsed = null;
+    }
     this._config = { ...this._config, [field]: parsed };
     this._dispatch();
     // Never call _render() here — doing so would steal focus from the active input.
@@ -573,10 +581,10 @@ class ElectricityCostCard extends HTMLElement {
 
   // Bar / gauge color based on absolute price level.
   _priceColor(p) {
-    if (p <= 1.0) return '#639922'; // green
-    if (p <= 2.0) return '#BA7517'; // amber
-    if (p <= 3.0) return '#E24B4A'; // red
-    return '#A32D2D';               // dark red
+    if (p <= 1.0) return 'var(--success-color, #639922)'; // green
+    if (p <= 2.0) return 'var(--warning-color, #BA7517)'; // amber
+    if (p <= 3.0) return 'var(--error-color, #E24B4A)';   // red
+    return '#A32D2D';                                     // dark red — beyond HA's error tier, no matching theme var
   }
 
   // Overall status badge — uses price_good / price_ok from root config.
@@ -698,7 +706,7 @@ class ElectricityCostCard extends HTMLElement {
       const bh  = Math.max(2, (p / maxP) * H);
       const x   = (i / prices.length) * W;
       const y   = H - bh;
-      const col = blocks[i].isCurrent ? '#185FA5' : this._priceColor(p);
+      const col = blocks[i].isCurrent ? 'var(--primary-color, #185FA5)' : this._priceColor(p);
       const op  = blocks[i].isCurrent ? '1' : '0.6';
       return `<rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${barW.toFixed(2)}" height="${bh.toFixed(2)}" fill="${col}" opacity="${op}"/>`;
     }).join('');
@@ -711,7 +719,7 @@ class ElectricityCostCard extends HTMLElement {
 
     const diff       = prices[prices.length - 1] - prices[0];
     const trendSym   = diff > 0.05 ? '↑' : diff < -0.05 ? '↓' : '→';
-    const trendColor = diff > 0.05 ? '#E24B4A' : diff < -0.05 ? '#639922' : '#888780';
+    const trendColor = diff > 0.05 ? 'var(--error-color, #E24B4A)' : diff < -0.05 ? 'var(--success-color, #639922)' : 'var(--secondary-text-color, #888780)';
     const lastPrice  = this._fmt(prices[prices.length - 1]);
 
     // Y-axis labels as HTML — inherits HA theme font identically to x-axis spans.
@@ -918,19 +926,19 @@ class ElectricityCostCard extends HTMLElement {
         .price-row { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
         .price-value { font-size: 36px; font-weight: 400; color: var(--primary-text-color); line-height: 1; }
         .price-unit  { font-size: 14px; color: var(--secondary-text-color); }
-        .sim-tag { font-size: 10px; font-weight: 500; background: #FAEEDA; color: #854F0B;
+        .sim-tag { font-size: 10px; font-weight: 500; background: rgba(var(--rgb-warning-color, 244,185,66), 0.18); color: var(--warning-color, #854F0B);
                    padding: 2px 8px; border-radius: 10px; }
 
         /* ── Status badge ── */
         .badge { display: inline-flex; align-items: center; gap: 5px; padding: 5px 11px;
                  border-radius: 20px; font-size: 12px; font-weight: 500; flex-shrink: 0; }
-        .badge.good { background: #EAF3DE; color: #27500A; }
-        .badge.ok   { background: #FAEEDA; color: #633806; }
-        .badge.bad  { background: #FCEBEB; color: #791F1F; }
+        .badge.good { background: rgba(var(--rgb-success-color, 99,153,34), 0.18); color: var(--success-color, #27500A); }
+        .badge.ok   { background: rgba(var(--rgb-warning-color, 244,185,66), 0.18); color: var(--warning-color, #633806); }
+        .badge.bad  { background: rgba(var(--rgb-error-color, 226,75,74), 0.18); color: var(--error-color, #791F1F); }
         .badge-dot  { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
-        .badge.good .badge-dot { background: #639922; }
-        .badge.ok   .badge-dot { background: #BA7517; }
-        .badge.bad  .badge-dot { background: #E24B4A; }
+        .badge.good .badge-dot { background: var(--success-color, #639922); }
+        .badge.ok   .badge-dot { background: var(--warning-color, #BA7517); }
+        .badge.bad  .badge-dot { background: var(--error-color, #E24B4A); }
 
         /* ── Gauge ── */
         .gauge-track  { height: 5px; border-radius: 3px; background: var(--divider-color, #e0e0e0);
@@ -977,16 +985,16 @@ class ElectricityCostCard extends HTMLElement {
         /* Recommendation row */
         .rec { display: flex; align-items: center; gap: 4px; justify-content: flex-end;
                font-size: 10px; font-weight: 500; margin-top: 3px; }
-        .rec.rec-good { color: #27500A; }
-        .rec.rec-ok   { color: #633806; }
-        .rec.rec-bad  { color: #791F1F; }
+        .rec.rec-good { color: var(--success-color, #27500A); }
+        .rec.rec-ok   { color: var(--warning-color, #633806); }
+        .rec.rec-bad  { color: var(--error-color, #791F1F); }
         .rec-dot  { width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
-        .rdot-good { background: #639922; }
-        .rdot-ok   { background: #BA7517; }
-        .rdot-bad  { background: #E24B4A; }
+        .rdot-good { background: var(--success-color, #639922); }
+        .rdot-ok   { background: var(--warning-color, #BA7517); }
+        .rdot-bad  { background: var(--error-color, #E24B4A); }
 
         /* Savings badge (green pill) */
-        .save-badge { font-size: 10px; font-weight: 500; color: #27500A; background: #EAF3DE;
+        .save-badge { font-size: 10px; font-weight: 500; color: var(--success-color, #27500A); background: rgba(var(--rgb-success-color, 99,153,34), 0.18);
                       padding: 2px 7px; border-radius: 10px; margin-top: 3px; display: inline-block; }
 
         /* Best-window sub-row */
@@ -994,10 +1002,10 @@ class ElectricityCostCard extends HTMLElement {
                      padding: 5px 11px 7px 55px; background: var(--secondary-background-color);
                      border-top: 0.5px solid var(--divider-color, #e0e0e0); }
         .best-label { display: flex; align-items: center; gap: 5px;
-                      font-size: 11px; color: #27500A; font-weight: 500; }
-        .best-dot   { width: 6px; height: 6px; border-radius: 50%; background: #639922;
+                      font-size: 11px; color: var(--success-color, #27500A); font-weight: 500; }
+        .best-dot   { width: 6px; height: 6px; border-radius: 50%; background: var(--success-color, #639922);
                       display: inline-block; flex-shrink: 0; }
-        .best-cost  { font-size: 11px; font-weight: 500; color: #27500A; }
+        .best-cost  { font-size: 11px; font-weight: 500; color: var(--success-color, #27500A); }
 
         /* ── Footer ── */
         .divider { height: 1px; background: var(--divider-color, #e0e0e0); margin: 14px 0; }
@@ -1011,7 +1019,7 @@ class ElectricityCostCard extends HTMLElement {
           <div class="price-row">
             <span class="price-value">${hasPrice ? price.toFixed(2) : '–'}</span>
             <span class="price-unit">${currency}/${unit}</span>
-            ${isSimulating ? '<span class="sim-tag">SIMULATION</span>' : ''}
+            ${isSimulating ? '<span class="sim-tag" role="status" aria-live="polite">SIMULATION</span>' : ''}
           </div>
           <span class="badge ${hasPrice ? status.cls : 'ok'}">
             <span class="badge-dot"></span>${hasPrice ? status.label : 'Loading…'}
@@ -1028,7 +1036,7 @@ class ElectricityCostCard extends HTMLElement {
         </div>
 
         <div class="slider-row">
-          <input type="range" id="price-slider" min="${priceMin.toFixed(2)}" max="${priceMax.toFixed(2)}" step="0.01" value="${price.toFixed(2)}"/>
+          <input type="range" id="price-slider" aria-label="Simulate price" min="${priceMin.toFixed(2)}" max="${priceMax.toFixed(2)}" step="0.01" value="${price.toFixed(2)}"/>
           ${isSimulating ? '<button class="reset-btn" id="reset-btn">↺ Live</button>' : ''}
         </div>
 
