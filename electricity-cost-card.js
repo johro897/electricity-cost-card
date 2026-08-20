@@ -889,6 +889,48 @@ class ElectricityCostCard extends HTMLElement {
   }
 
 
+  // ── Live-patch during slider drag ───────────────────────────────────────────
+  // Updates only the price-dependent nodes in place — never touches
+  // #price-slider itself, so dragging isn't interrupted (see the "input"
+  // listener below for why a full _render() during drag breaks dragging).
+  _patchSimulatedPrice() {
+    if (!this.shadowRoot.querySelector('.price-value')) { this._render(); return; }
+
+    const hasPrice     = this._livePrice !== null || this._simPrice !== null;
+    const price        = this._simPrice !== null ? this._simPrice : (this._livePrice ?? 0);
+    const isSimulating = this._simPrice !== null;
+    const status       = this._priceStatus(price);
+    const priceMax     = this._priceMax();
+    const priceMin     = this._priceMin();
+    const gaugePct     = Math.min(97, Math.max(3, ((price - priceMin) / (priceMax - priceMin)) * 100));
+    const gaugeColor   = this._priceColor(price);
+
+    const priceValueEl = this.shadowRoot.querySelector('.price-value');
+    if (priceValueEl) priceValueEl.textContent = hasPrice ? price.toFixed(2) : '–';
+
+    const simTagEl = this.shadowRoot.getElementById('sim-tag');
+    if (simTagEl) simTagEl.style.display = isSimulating ? '' : 'none';
+
+    const badgeEl = this.shadowRoot.querySelector('.badge');
+    if (badgeEl) badgeEl.className = `badge ${hasPrice ? status.cls : 'ok'}`;
+    const badgeLabelEl = this.shadowRoot.querySelector('.badge-label');
+    if (badgeLabelEl) badgeLabelEl.textContent = hasPrice ? status.label : 'Loading…';
+
+    const gaugeFillEl = this.shadowRoot.querySelector('.gauge-fill');
+    if (gaugeFillEl) {
+      gaugeFillEl.style.width = `${gaugePct}%`;
+      gaugeFillEl.style.background = gaugeColor;
+    }
+
+    const resetBtnEl = this.shadowRoot.getElementById('reset-btn');
+    if (resetBtnEl) resetBtnEl.style.display = isSimulating ? '' : 'none';
+
+    const activitiesEl = this.shadowRoot.querySelector('.activities');
+    if (activitiesEl) {
+      activitiesEl.innerHTML = this._config.activities.map(a => this._renderActivity(a)).join('');
+    }
+  }
+
   // ── Main render ────────────────────────────────────────────────────────────
 
   _render() {
@@ -1018,10 +1060,10 @@ class ElectricityCostCard extends HTMLElement {
           <div class="price-row">
             <span class="price-value">${hasPrice ? price.toFixed(2) : '–'}</span>
             <span class="price-unit">${currency}/${unit}</span>
-            ${isSimulating ? '<span class="sim-tag">SIMULATION</span>' : ''}
+            <span class="sim-tag" id="sim-tag" style="display:${isSimulating ? '' : 'none'}">SIMULATION</span>
           </div>
           <span class="badge ${hasPrice ? status.cls : 'ok'}">
-            <span class="badge-dot"></span>${hasPrice ? status.label : 'Loading…'}
+            <span class="badge-dot"></span><span class="badge-label">${hasPrice ? status.label : 'Loading…'}</span>
           </span>
         </div>
 
@@ -1036,7 +1078,7 @@ class ElectricityCostCard extends HTMLElement {
 
         <div class="slider-row">
           <input type="range" id="price-slider" min="${priceMin.toFixed(2)}" max="${priceMax.toFixed(2)}" step="0.01" value="${price.toFixed(2)}"/>
-          ${isSimulating ? '<button class="reset-btn" id="reset-btn">↺ Live</button>' : ''}
+          <button class="reset-btn" id="reset-btn" style="display:${isSimulating ? '' : 'none'}">↺ Live</button>
         </div>
 
         <div class="section-label">Next ${this._config.hours_ahead} hours</div>
@@ -1055,13 +1097,17 @@ class ElectricityCostCard extends HTMLElement {
       slider.addEventListener('input', e => {
         const v = parseFloat(e.target.value);
         this._simPrice = Math.abs(v - (this._livePrice ?? v)) > 0.01 ? v : null;
-        // Collapse rapid drag ticks into at most one full re-render per animation
-        // frame instead of one per native "input" event (which can fire far more
-        // often than the display refreshes on some pointer devices).
+        // Patch just the price-dependent DOM nodes instead of calling the full
+        // _render() (which replaces shadowRoot.innerHTML wholesale, destroying
+        // and recreating #price-slider itself). Doing that while the user's
+        // pointer is actively dragging the slider breaks the browser's native
+        // drag tracking on that element — the slider would only "jump" on
+        // click instead of dragging smoothly. Collapsed to at most one patch
+        // per animation frame, same throttling as before.
         if (this._renderRaf) return;
         this._renderRaf = requestAnimationFrame(() => {
           this._renderRaf = null;
-          this._render();
+          this._patchSimulatedPrice();
         });
       });
     }

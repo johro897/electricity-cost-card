@@ -234,6 +234,11 @@ All configuration lives in the dashboard YAML (`ui-lovelace.yaml` or the `.stora
 
 ## Changelog
 
+### v2.5
+**Fix regression from beta-2.4** — [#10](https://github.com/johro897/electricity-cost-card/issues/10)
+- beta-2.4's slider throttling still fully re-rendered the card (replacing the whole shadow DOM, including the `<input type="range">` element itself) on every animation-frame tick during a drag — this broke the browser's native drag tracking, so the slider only jumped on click instead of dragging smoothly
+- The slider's live updates now patch just the price-dependent DOM nodes (price value, badge, gauge fill, activity costs) directly, and never touch the slider element itself
+
 ### v2.4
 **Performance** — [#10](https://github.com/johro897/electricity-cost-card/issues/10)
 - The card now only re-renders when the Nordpool sensor's state actually changes, instead of on every Home Assistant state change anywhere in the install
