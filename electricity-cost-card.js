@@ -53,6 +53,15 @@
 // =============================================================================
 
 
+function escHtml(str) {
+  if (str === undefined || str === null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 // =============================================================================
 // VISUAL EDITOR
 // Registered via getConfigElement() — HA shows this automatically when the
@@ -157,13 +166,13 @@ class ElectricityCostCardEditor extends HTMLElement {
     const activityRows = acts.map((a, i) => `
       <div class="act-row">
         <div class="act-row-header">
-          <span class="act-row-title">${a.name || 'Activity ' + (i + 1)}</span>
+          <span class="act-row-title">${escHtml(a.name || 'Activity ' + (i + 1))}</span>
           <button class="remove-btn" data-idx="${i}">Remove</button>
         </div>
         <div class="field-grid">
           <div class="field">
             <label>Name</label>
-            <input class="act-field" data-idx="${i}" data-field="name" value="${a.name ?? ''}" placeholder="e.g. Dishwasher"/>
+            <input class="act-field" data-idx="${i}" data-field="name" value="${escHtml(a.name ?? '')}" placeholder="e.g. Dishwasher"/>
           </div>
           <div class="field">
             <label>Icon</label>
@@ -248,7 +257,7 @@ class ElectricityCostCardEditor extends HTMLElement {
         </div>
         <div class="field" style="grid-column:1/-1">
           <label>Card title (optional)</label>
-          <input id="title-input" value="${c.title ?? ''}" placeholder="Electricity cost"/>
+          <input id="title-input" value="${escHtml(c.title ?? '')}" placeholder="Electricity cost"/>
         </div>
         <div class="field">
           <label>Graph: hours ahead</label>
@@ -761,9 +770,9 @@ class ElectricityCostCard extends HTMLElement {
       if (this._livePrice === null && this._simPrice === null) {
         return `
           <div class="activity">
-            <div class="activity-icon" style="background:${iconBg}">${activity.icon}</div>
+            <div class="activity-icon" style="background:${iconBg}">${escHtml(activity.icon || '')}</div>
             <div class="activity-info">
-              <div class="activity-name">${activity.name}</div>
+              <div class="activity-name">${escHtml(activity.name || '')}</div>
               <div class="activity-sub">${kwhStr}</div>
             </div>
             <div class="activity-right" style="color:var(--secondary-text-color);font-size:12px;">Loading…</div>
@@ -779,9 +788,9 @@ class ElectricityCostCard extends HTMLElement {
 
       return `
         <div class="activity">
-          <div class="activity-icon" style="background:${iconBg}">${activity.icon}</div>
+          <div class="activity-icon" style="background:${iconBg}">${escHtml(activity.icon || '')}</div>
           <div class="activity-info">
-            <div class="activity-name">${activity.name}</div>
+            <div class="activity-name">${escHtml(activity.name || '')}</div>
             <div class="activity-sub">${kwhStr}</div>
           </div>
           <div class="activity-right">
@@ -810,9 +819,9 @@ class ElectricityCostCard extends HTMLElement {
       const durLabel = `${kwhStr} · ${activity.duration_hours}h`;
       return `
         <div class="activity">
-          <div class="activity-icon" style="background:${iconBg}">${activity.icon}</div>
+          <div class="activity-icon" style="background:${iconBg}">${escHtml(activity.icon || '')}</div>
           <div class="activity-info">
-            <div class="activity-name">${activity.name}</div>
+            <div class="activity-name">${escHtml(activity.name || '')}</div>
             <div class="activity-sub">${durLabel}</div>
           </div>
           <div class="activity-right">
@@ -867,9 +876,9 @@ class ElectricityCostCard extends HTMLElement {
     return `
       <div class="activity-dur">
         <div class="activity">
-          <div class="activity-icon" style="background:${iconBg}">${activity.icon}</div>
+          <div class="activity-icon" style="background:${iconBg}">${escHtml(activity.icon || '')}</div>
           <div class="activity-info">
-            <div class="activity-name">${activity.name}</div>
+            <div class="activity-name">${escHtml(activity.name || '')}</div>
             <div class="activity-sub">${durLabel}</div>
           </div>
           <div class="activity-right">
@@ -903,7 +912,7 @@ class ElectricityCostCard extends HTMLElement {
     const activities   = this._config.activities.map(a => this._renderActivity(a)).join('');
     const timeNow      = new Date().toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
     // Use configured title or fall back to default
-    const cardTitle    = this._config.title || 'Electricity cost';
+    const cardTitle    = escHtml(this._config.title || 'Electricity cost');
 
     this.shadowRoot.innerHTML = `
       <style>

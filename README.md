@@ -234,6 +234,10 @@ All configuration lives in the dashboard YAML (`ui-lovelace.yaml` or the `.stora
 
 ## Changelog
 
+### v2.3
+**Security hardening** — [#9](https://github.com/johro897/electricity-cost-card/issues/9)
+- Activity names, icons, and the card title are now HTML-escaped before being rendered — previously a crafted value in a shared/pasted dashboard YAML could break out of an HTML attribute or inject markup
+
 ### v2.1
 - **New:** `currency` config key — set an explicit price suffix, or let the card auto-detect it from the sensor's `currency` attribute
 - **New:** `unit` config key — same auto-detection pattern for the energy unit
