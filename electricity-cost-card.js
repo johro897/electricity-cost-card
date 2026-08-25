@@ -960,8 +960,13 @@ class ElectricityCostCard extends HTMLElement {
   // automatically, matching the x-axis time labels below the chart.
   _buildGraph(blocks) {
     if (!blocks.length) {
+      this._lastGraphBlocks = null;
       return `<div style="font-size:11px;color:var(--secondary-text-color);padding:8px 0;">${_t(this._hass, "no_price_data")}</div>`;
     }
+    // Cached for the hover-tooltip listeners wired up at the end of _render() —
+    // reading the same blocks the graph was actually drawn from, not
+    // recomputed, so the tooltip can never disagree with what's on screen.
+    this._lastGraphBlocks = blocks;
     const prices = blocks.map(b => b.price);
     const maxP   = Math.max(...prices, 0.1);
     const mid    = maxP / 2;
@@ -990,15 +995,20 @@ class ElectricityCostCard extends HTMLElement {
     const lastPrice  = this._fmt(prices[prices.length - 1]);
 
     // Y-axis labels as HTML — inherits HA theme font identically to x-axis spans.
+    // The tooltip lives directly in this outer (non-clipping) relative
+    // container, NOT inside the inner overflow:hidden one — it's positioned
+    // above the bars, which would otherwise get clipped by that overflow.
+    // Its position is set in pixels by the mousemove handler in _render(),
+    // not CSS percentages, so it stays correct regardless of this nesting.
     return `
-      <div style="position:relative;">
+      <div style="position:relative;" id="price-graph-outer">
         <div style="position:absolute;left:0;top:0;bottom:16px;display:flex;flex-direction:column;justify-content:space-between;text-align:right;width:${LEFT}px;">
           <span style="font-size:10px;color:var(--secondary-text-color);line-height:1">${this._fmt(maxP)}</span>
           <span style="font-size:10px;color:var(--secondary-text-color);line-height:1">${this._fmt(mid)}</span>
           <span style="font-size:10px;color:var(--secondary-text-color);line-height:1">0</span>
         </div>
         <div style="margin-left:${LEFT + 3}px;overflow:hidden;">
-          <svg width="100%" viewBox="0 0 ${W} ${H + 2}" preserveAspectRatio="none" style="height:54px;display:block;">
+          <svg id="price-graph-svg" width="100%" viewBox="0 0 ${W} ${H + 2}" preserveAspectRatio="none" style="height:54px;display:block;cursor:crosshair;">
             ${gridLines}${bars}
           </svg>
           <div style="display:flex;justify-content:space-between;margin-top:3px;">
@@ -1007,6 +1017,7 @@ class ElectricityCostCard extends HTMLElement {
             <span style="font-size:10px;color:var(--secondary-text-color)">${blocks[blocks.length - 1].time}</span>
           </div>
         </div>
+        <div class="graph-tooltip" id="graph-tooltip"></div>
       </div>`;
   }
 
@@ -1279,6 +1290,13 @@ class ElectricityCostCard extends HTMLElement {
         /* ── Price graph ── */
         .graph-wrap { margin-bottom: 16px; }
         .day-stats { font-size: 11px; color: var(--secondary-text-color); margin: -10px 0 16px; }
+        .graph-tooltip {
+          display: none; position: absolute; top: -6px; transform: translate(-50%, -100%);
+          background: var(--card-background-color, #fff); color: var(--primary-text-color);
+          border: 1px solid var(--divider-color, #e0e0e0); border-radius: 6px;
+          padding: 4px 8px; font-size: 11px; white-space: nowrap;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.15); pointer-events: none; z-index: 2;
+        }
 
         /* ── Activities ── */
         .activities { display: flex; flex-direction: column; gap: 5px; }
@@ -1396,6 +1414,39 @@ class ElectricityCostCard extends HTMLElement {
         this._simPrice = null;
         this._render();
       });
+    }
+
+    // ── Price graph hover tooltip ──────────────────────────────────────────
+    const graphSvg   = this.shadowRoot.getElementById('price-graph-svg');
+    const graphOuter = this.shadowRoot.getElementById('price-graph-outer');
+    const tooltip    = this.shadowRoot.getElementById('graph-tooltip');
+    if (graphSvg && graphOuter && tooltip && this._lastGraphBlocks?.length) {
+      const blocks   = this._lastGraphBlocks;
+      const currency = this._currencySuffix();
+      const unit     = this._unitSuffix();
+      const showTooltip = (clientX) => {
+        const rect = graphSvg.getBoundingClientRect();
+        if (!rect.width) return;
+        const frac = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+        const idx  = Math.min(blocks.length - 1, Math.floor(frac * blocks.length));
+        const b    = blocks[idx];
+        // textContent, not innerHTML — b.time is our own formatted HH:MM string
+        // and the price is numeric, but no reason to open an injection path here.
+        tooltip.textContent = `${b.time} · ${this._fmt(b.price)} ${currency}/${unit}`;
+        // Positioned in pixels relative to the OUTER (non-clipping) container —
+        // the tooltip lives there specifically so it isn't cut off by the inner
+        // graph container's overflow:hidden. CSS percentages can't express
+        // "aligned with a bar inside a clipped sibling", so this is computed
+        // from the real bounding rects instead.
+        const outerRect = graphOuter.getBoundingClientRect();
+        const barCenterX = rect.left + ((idx + 0.5) / blocks.length) * rect.width;
+        tooltip.style.left    = `${barCenterX - outerRect.left}px`;
+        tooltip.style.top     = `${rect.top - outerRect.top}px`;
+        tooltip.style.display = 'block';
+      };
+      graphSvg.addEventListener('mousemove', e => showTooltip(e.clientX));
+      graphSvg.addEventListener('mouseenter', e => showTooltip(e.clientX));
+      graphSvg.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
     }
   }
 }
