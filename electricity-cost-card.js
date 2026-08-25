@@ -76,6 +76,7 @@ const TRANSLATIONS = {
     activities_label: "Activities",
     simulate_price_aria: "Simulate price",
     no_price_data: "No price data available",
+    day_stats: "Today: {avg} avg · {min} min · {max} max {currency}/{unit}",
     best_window: "Best {start}–{end}",
     entity_required: "entity is required",
     editor_section_card_settings: "Card settings",
@@ -126,6 +127,7 @@ const TRANSLATIONS = {
     activities_label: "Aktiviteter",
     simulate_price_aria: "Simulera pris",
     no_price_data: "Ingen prisdata tillgänglig",
+    day_stats: "Idag: {avg} snitt · {min} min · {max} max {currency}/{unit}",
     best_window: "Bäst {start}–{end}",
     entity_required: "entity krävs",
     editor_section_card_settings: "Kortinställningar",
@@ -176,6 +178,7 @@ const TRANSLATIONS = {
     activities_label: "Aktivitäten",
     simulate_price_aria: "Preis simulieren",
     no_price_data: "Keine Preisdaten verfügbar",
+    day_stats: "Heute: {avg} Ø · {min} min · {max} max {currency}/{unit}",
     best_window: "Beste Zeit {start}–{end}",
     entity_required: "entity ist erforderlich",
     editor_section_card_settings: "Karteneinstellungen",
@@ -226,6 +229,7 @@ const TRANSLATIONS = {
     activities_label: "Activités",
     simulate_price_aria: "Simuler le prix",
     no_price_data: "Aucune donnée de prix disponible",
+    day_stats: "Aujourd'hui : {avg} moy · {min} min · {max} max {currency}/{unit}",
     best_window: "Meilleur créneau {start}–{end}",
     entity_required: "entity est requis",
     editor_section_card_settings: "Paramètres de la carte",
@@ -914,6 +918,22 @@ class ElectricityCostCard extends HTMLElement {
   }
 
 
+  // ── Day stats ──────────────────────────────────────────────────────────────
+
+  // Min/avg/max across today's price blocks specifically — not the merged
+  // today+tomorrow array _prices uses for look-aheads, since "today" here
+  // means the calendar day, not a rolling window.
+  _todayStats() {
+    if (!this._today.length) return null;
+    let min = Infinity, max = -Infinity, sum = 0;
+    for (const p of this._today) {
+      if (p < min) min = p;
+      if (p > max) max = p;
+      sum += p;
+    }
+    return { min, max, avg: sum / this._today.length };
+  }
+
   // ── Price graph ────────────────────────────────────────────────────────────
 
   // Build the list of upcoming blocks for the graph.
@@ -1198,6 +1218,13 @@ class ElectricityCostCard extends HTMLElement {
     const upcomingBlocks = this._getUpcomingBlocks();
     const graph        = this._buildGraph(upcomingBlocks);
     const activities   = this._config.activities.map(a => this._renderActivity(a)).join('');
+    const dayStats     = this._todayStats();
+    const dayStatsHtml = dayStats
+      ? `<div class="day-stats">${_t(this._hass, "day_stats", {
+          avg: this._fmt(dayStats.avg), min: this._fmt(dayStats.min), max: this._fmt(dayStats.max),
+          currency, unit,
+        })}</div>`
+      : '';
     const timeNow      = new Date().toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
     // Use configured title or fall back to default
     const cardTitle    = escHtml(this._config.title || _t(this._hass, "title_default"));
@@ -1251,6 +1278,7 @@ class ElectricityCostCard extends HTMLElement {
 
         /* ── Price graph ── */
         .graph-wrap { margin-bottom: 16px; }
+        .day-stats { font-size: 11px; color: var(--secondary-text-color); margin: -10px 0 16px; }
 
         /* ── Activities ── */
         .activities { display: flex; flex-direction: column; gap: 5px; }
@@ -1331,6 +1359,7 @@ class ElectricityCostCard extends HTMLElement {
 
         <div class="section-label">${_t(this._hass, "next_hours", { hours: this._config.hours_ahead })}</div>
         <div class="graph-wrap">${graph}</div>
+        ${dayStatsHtml}
 
         <div class="section-label">${_t(this._hass, "activities_label")}</div>
         <div class="activities">${activities}</div>

@@ -9,6 +9,7 @@ A Home Assistant custom card that displays real-time electricity pricing from No
 - **Live price** from Nordpool sensor (15-minute blocks)
 - **Currency-agnostic** — auto-detects currency and unit from the sensor (SEK, EUR, ...), or set them explicitly
 - **Price graph** covering the next N hours, configurable per dashboard — crosses midnight seamlessly using tomorrow's prices when available
+- **Daily min/avg/max summary** — a one-line stat under the graph summarizing today's actual price range
 - **Per-activity cost** — each appliance shows what it will cost right now
 - **Duration mode** — appliances with a set runtime show the integrated cost over real upcoming price blocks, not just the current spot price
 - **Best window** — finds the cheapest consecutive time slot within your search horizon, including overnight
@@ -235,7 +236,11 @@ All configuration lives in the dashboard YAML (`ui-lovelace.yaml` or the `.stora
 
 ## Changelog
 
-### v2.7
+### v2.7 (in progress — release-2.7 branch, not yet shipped)
+**Daily min/avg/max price summary** — [#13](https://github.com/johro897/electricity-cost-card/issues/13)
+- New one-line stat under the graph: "Today: X.XX avg · X.XX min · X.XX max {currency}/{unit}" — computed from today's own 96 price blocks (not the merged today+tomorrow window used for look-aheads elsewhere in the card)
+- Translated into all four supported languages
+
 **Language support** — [#15](https://github.com/johro897/electricity-cost-card/issues/15)
 - All rendered UI text (status badges, recommendation labels, section headers, simulation tag, best-window text, loading/no-data states, and the entire visual editor) now auto-translates based on your Home Assistant instance's configured language
 - Supported languages: **English** (default), **Swedish**, **German**, **French** — falls back to English for any other language
