@@ -53,6 +53,233 @@
 // =============================================================================
 
 
+const DEFAULT_LANG = "en";
+
+// Every UI string this file's card + editor render, keyed by BCP-47 primary
+// language subtag. Bundled inline (not fetched from separate
+// translations/<lang>.json files) — see root CLAUDE.md's Kortkonventioner
+// for why: HACS's plugin category only ever distributes the one file named
+// in hacs.json, so extra files never reach a real install.
+const TRANSLATIONS = {
+  en: {
+    title_default: "Electricity cost",
+    loading: "Loading…",
+    simulation_tag: "SIMULATION",
+    price_status_good: "Good price",
+    price_status_ok: "Normal",
+    price_status_bad: "High price",
+    simple_rec_good: "Good now",
+    simple_rec_ok: "OK now",
+    simple_rec_bad: "Wait",
+    reset_live: "↺ Live",
+    next_hours: "Next {hours} hours",
+    activities_label: "Activities",
+    simulate_price_aria: "Simulate price",
+    no_price_data: "No price data available",
+    best_window: "Best {start}–{end}",
+    entity_required: "entity is required",
+    editor_section_card_settings: "Card settings",
+    editor_label_entity: "Nordpool entity",
+    editor_label_title: "Card title (optional)",
+    editor_label_hours_ahead: "Graph: hours ahead",
+    editor_label_search_hours: "Best window: search hours",
+    editor_label_price_good: "Good price ceiling (per kWh)",
+    editor_label_price_ok: "Normal price ceiling (per kWh)",
+    editor_section_advanced: "Advanced (optional)",
+    editor_hint_advanced: "Leave blank to auto-detect from the sensor, or set explicitly for non-SEK currencies.",
+    editor_label_currency: "Currency suffix",
+    editor_placeholder_currency: "auto (kr, €, $...)",
+    editor_label_unit: "Unit suffix",
+    editor_placeholder_unit: "auto (kWh)",
+    editor_label_price_max: "Gauge/slider max price",
+    editor_placeholder_price_max: "auto (price_ok × 5/3)",
+    editor_label_price_min: "Gauge/slider min price",
+    editor_section_activities: "Activities",
+    editor_add_activity: "+ Add activity",
+    editor_section_yaml: "Generated YAML",
+    editor_copy: "Copy",
+    editor_copied: "Copied!",
+    editor_activity_default_name: "Activity {n}",
+    editor_remove: "Remove",
+    editor_label_name: "Name",
+    editor_placeholder_name: "e.g. Dishwasher",
+    editor_label_icon: "Icon",
+    editor_label_kwh_min: "Min kWh",
+    editor_label_kwh_max: "Max kWh",
+    editor_label_threshold: "Good-price threshold (per kWh)",
+    editor_placeholder_threshold: "e.g. 1.5",
+    editor_label_duration: "Duration (hours, optional)",
+    editor_placeholder_duration: "e.g. 2.0",
+  },
+  sv: {
+    title_default: "Elkostnad",
+    loading: "Laddar…",
+    simulation_tag: "SIMULERING",
+    price_status_good: "Bra pris",
+    price_status_ok: "Normalt",
+    price_status_bad: "Högt pris",
+    simple_rec_good: "Bra nu",
+    simple_rec_ok: "OK nu",
+    simple_rec_bad: "Vänta",
+    reset_live: "↺ Live",
+    next_hours: "Nästa {hours} timmar",
+    activities_label: "Aktiviteter",
+    simulate_price_aria: "Simulera pris",
+    no_price_data: "Ingen prisdata tillgänglig",
+    best_window: "Bäst {start}–{end}",
+    entity_required: "entity krävs",
+    editor_section_card_settings: "Kortinställningar",
+    editor_label_entity: "Nordpool-entitet",
+    editor_label_title: "Korttitel (valfritt)",
+    editor_label_hours_ahead: "Graf: timmar framåt",
+    editor_label_search_hours: "Bästa fönster: sök-timmar",
+    editor_label_price_good: "Tak för bra pris (per kWh)",
+    editor_label_price_ok: "Tak för normalt pris (per kWh)",
+    editor_section_advanced: "Avancerat (valfritt)",
+    editor_hint_advanced: "Lämna tomt för att auto-detektera från sensorn, eller ange explicit för icke-SEK-valutor.",
+    editor_label_currency: "Valutasuffix",
+    editor_placeholder_currency: "auto (kr, €, $...)",
+    editor_label_unit: "Enhetssuffix",
+    editor_placeholder_unit: "auto (kWh)",
+    editor_label_price_max: "Mätare/slider: maxpris",
+    editor_placeholder_price_max: "auto (price_ok × 5/3)",
+    editor_label_price_min: "Mätare/slider: minpris",
+    editor_section_activities: "Aktiviteter",
+    editor_add_activity: "+ Lägg till aktivitet",
+    editor_section_yaml: "Genererad YAML",
+    editor_copy: "Kopiera",
+    editor_copied: "Kopierat!",
+    editor_activity_default_name: "Aktivitet {n}",
+    editor_remove: "Ta bort",
+    editor_label_name: "Namn",
+    editor_placeholder_name: "t.ex. Diskmaskin",
+    editor_label_icon: "Ikon",
+    editor_label_kwh_min: "Min kWh",
+    editor_label_kwh_max: "Max kWh",
+    editor_label_threshold: "Tröskel för bra pris (per kWh)",
+    editor_placeholder_threshold: "t.ex. 1.5",
+    editor_label_duration: "Varaktighet (timmar, valfritt)",
+    editor_placeholder_duration: "t.ex. 2.0",
+  },
+  de: {
+    title_default: "Stromkosten",
+    loading: "Wird geladen…",
+    simulation_tag: "SIMULATION",
+    price_status_good: "Guter Preis",
+    price_status_ok: "Normal",
+    price_status_bad: "Hoher Preis",
+    simple_rec_good: "Jetzt gut",
+    simple_rec_ok: "Jetzt OK",
+    simple_rec_bad: "Warten",
+    reset_live: "↺ Live",
+    next_hours: "Nächste {hours} Stunden",
+    activities_label: "Aktivitäten",
+    simulate_price_aria: "Preis simulieren",
+    no_price_data: "Keine Preisdaten verfügbar",
+    best_window: "Beste Zeit {start}–{end}",
+    entity_required: "entity ist erforderlich",
+    editor_section_card_settings: "Karteneinstellungen",
+    editor_label_entity: "Nordpool-Entität",
+    editor_label_title: "Kartentitel (optional)",
+    editor_label_hours_ahead: "Grafik: Stunden im Voraus",
+    editor_label_search_hours: "Bestes Fenster: Suchstunden",
+    editor_label_price_good: "Obergrenze guter Preis (pro kWh)",
+    editor_label_price_ok: "Obergrenze normaler Preis (pro kWh)",
+    editor_section_advanced: "Erweitert (optional)",
+    editor_hint_advanced: "Leer lassen für automatische Erkennung vom Sensor, oder explizit für Nicht-SEK-Währungen festlegen.",
+    editor_label_currency: "Währungssuffix",
+    editor_placeholder_currency: "auto (kr, €, $...)",
+    editor_label_unit: "Einheitssuffix",
+    editor_placeholder_unit: "auto (kWh)",
+    editor_label_price_max: "Anzeige/Regler: Höchstpreis",
+    editor_placeholder_price_max: "auto (price_ok × 5/3)",
+    editor_label_price_min: "Anzeige/Regler: Mindestpreis",
+    editor_section_activities: "Aktivitäten",
+    editor_add_activity: "+ Aktivität hinzufügen",
+    editor_section_yaml: "Generiertes YAML",
+    editor_copy: "Kopieren",
+    editor_copied: "Kopiert!",
+    editor_activity_default_name: "Aktivität {n}",
+    editor_remove: "Entfernen",
+    editor_label_name: "Name",
+    editor_placeholder_name: "z. B. Geschirrspüler",
+    editor_label_icon: "Symbol",
+    editor_label_kwh_min: "Min. kWh",
+    editor_label_kwh_max: "Max. kWh",
+    editor_label_threshold: "Schwellenwert für guten Preis (pro kWh)",
+    editor_placeholder_threshold: "z. B. 1.5",
+    editor_label_duration: "Dauer (Stunden, optional)",
+    editor_placeholder_duration: "z. B. 2.0",
+  },
+  fr: {
+    title_default: "Coût de l'électricité",
+    loading: "Chargement…",
+    simulation_tag: "SIMULATION",
+    price_status_good: "Bon prix",
+    price_status_ok: "Normal",
+    price_status_bad: "Prix élevé",
+    simple_rec_good: "Bon maintenant",
+    simple_rec_ok: "OK maintenant",
+    simple_rec_bad: "Attendre",
+    reset_live: "↺ Direct",
+    next_hours: "Prochaines {hours} heures",
+    activities_label: "Activités",
+    simulate_price_aria: "Simuler le prix",
+    no_price_data: "Aucune donnée de prix disponible",
+    best_window: "Meilleur créneau {start}–{end}",
+    entity_required: "entity est requis",
+    editor_section_card_settings: "Paramètres de la carte",
+    editor_label_entity: "Entité Nordpool",
+    editor_label_title: "Titre de la carte (facultatif)",
+    editor_label_hours_ahead: "Graphique : heures à venir",
+    editor_label_search_hours: "Meilleur créneau : heures de recherche",
+    editor_label_price_good: "Plafond bon prix (par kWh)",
+    editor_label_price_ok: "Plafond prix normal (par kWh)",
+    editor_section_advanced: "Avancé (facultatif)",
+    editor_hint_advanced: "Laisser vide pour la détection automatique depuis le capteur, ou définir explicitement pour les devises autres que SEK.",
+    editor_label_currency: "Suffixe de devise",
+    editor_placeholder_currency: "auto (kr, €, $...)",
+    editor_label_unit: "Suffixe d'unité",
+    editor_placeholder_unit: "auto (kWh)",
+    editor_label_price_max: "Jauge/curseur : prix maximum",
+    editor_placeholder_price_max: "auto (price_ok × 5/3)",
+    editor_label_price_min: "Jauge/curseur : prix minimum",
+    editor_section_activities: "Activités",
+    editor_add_activity: "+ Ajouter une activité",
+    editor_section_yaml: "YAML généré",
+    editor_copy: "Copier",
+    editor_copied: "Copié !",
+    editor_activity_default_name: "Activité {n}",
+    editor_remove: "Supprimer",
+    editor_label_name: "Nom",
+    editor_placeholder_name: "ex. Lave-vaisselle",
+    editor_label_icon: "Icône",
+    editor_label_kwh_min: "kWh min",
+    editor_label_kwh_max: "kWh max",
+    editor_label_threshold: "Seuil de bon prix (par kWh)",
+    editor_placeholder_threshold: "ex. 1.5",
+    editor_label_duration: "Durée (heures, facultatif)",
+    editor_placeholder_duration: "ex. 2.0",
+  },
+};
+
+/** Resolves the HA-configured language to one of our translated languages, falling back to English. */
+function _lang(hass) {
+  const raw = (hass?.locale?.language || hass?.language || DEFAULT_LANG).toLowerCase();
+  const primary = raw.split("-")[0];
+  return TRANSLATIONS[primary] ? primary : DEFAULT_LANG;
+}
+
+/** Looks up a UI string in the current language, with {placeholder} substitution. */
+function _t(hass, key, replacements) {
+  const dict = TRANSLATIONS[_lang(hass)] || TRANSLATIONS[DEFAULT_LANG];
+  const raw = dict[key] ?? TRANSLATIONS[DEFAULT_LANG][key] ?? key;
+  if (!replacements) return raw;
+  return raw.replace(/\{([^}]+)\}/g, (match, k) =>
+    Object.prototype.hasOwnProperty.call(replacements, k) ? replacements[k] : match
+  );
+}
+
 function escHtml(str) {
   if (str === undefined || str === null) return '';
   return String(str)
@@ -82,6 +309,10 @@ class ElectricityCostCardEditor extends HTMLElement {
     this.attachShadow({ mode: 'open' });
     this._config = {};
     this._rendered = false;  // Track whether initial DOM has been built
+  }
+
+  set hass(hass) {
+    this._hass = hass;
   }
 
   setConfig(config) {
@@ -174,35 +405,35 @@ class ElectricityCostCardEditor extends HTMLElement {
     const activityRows = acts.map((a, i) => `
       <div class="act-row">
         <div class="act-row-header">
-          <span class="act-row-title">${escHtml(a.name || 'Activity ' + (i + 1))}</span>
-          <button class="remove-btn" data-idx="${i}">Remove</button>
+          <span class="act-row-title">${escHtml(a.name || _t(this._hass, "editor_activity_default_name", { n: i + 1 }))}</span>
+          <button class="remove-btn" data-idx="${i}">${_t(this._hass, "editor_remove")}</button>
         </div>
         <div class="field-grid">
           <div class="field">
-            <label>Name</label>
-            <input class="act-field" data-idx="${i}" data-field="name" value="${escHtml(a.name ?? '')}" placeholder="e.g. Dishwasher"/>
+            <label>${_t(this._hass, "editor_label_name")}</label>
+            <input class="act-field" data-idx="${i}" data-field="name" value="${escHtml(a.name ?? '')}" placeholder="${_t(this._hass, "editor_placeholder_name")}"/>
           </div>
           <div class="field">
-            <label>Icon</label>
+            <label>${_t(this._hass, "editor_label_icon")}</label>
             <select class="act-field" data-idx="${i}" data-field="icon">
               ${ICONS.map(ic => `<option value="${ic}" ${a.icon === ic ? 'selected' : ''}>${ic}</option>`).join('')}
             </select>
           </div>
           <div class="field">
-            <label>Min kWh</label>
+            <label>${_t(this._hass, "editor_label_kwh_min")}</label>
             <input class="act-field" type="number" step="0.1" min="0.1" data-idx="${i}" data-field="kwh_min" value="${a.kwh_min ?? ''}"/>
           </div>
           <div class="field">
-            <label>Max kWh</label>
+            <label>${_t(this._hass, "editor_label_kwh_max")}</label>
             <input class="act-field" type="number" step="0.1" min="0.1" data-idx="${i}" data-field="kwh_max" value="${a.kwh_max ?? ''}"/>
           </div>
           <div class="field">
-            <label>Good-price threshold (per kWh)</label>
-            <input class="act-field" type="number" step="0.1" min="0.1" data-idx="${i}" data-field="threshold" value="${a.threshold ?? ''}" placeholder="e.g. 1.5"/>
+            <label>${_t(this._hass, "editor_label_threshold")}</label>
+            <input class="act-field" type="number" step="0.1" min="0.1" data-idx="${i}" data-field="threshold" value="${a.threshold ?? ''}" placeholder="${_t(this._hass, "editor_placeholder_threshold")}"/>
           </div>
           <div class="field">
-            <label>Duration (hours, optional)</label>
-            <input class="act-field" type="number" step="0.5" min="0.5" data-idx="${i}" data-field="duration_hours" value="${a.duration_hours ?? ''}" placeholder="e.g. 2.0"/>
+            <label>${_t(this._hass, "editor_label_duration")}</label>
+            <input class="act-field" type="number" step="0.5" min="0.5" data-idx="${i}" data-field="duration_hours" value="${a.duration_hours ?? ''}" placeholder="${_t(this._hass, "editor_placeholder_duration")}"/>
           </div>
         </div>
       </div>`).join('');
@@ -257,61 +488,61 @@ class ElectricityCostCardEditor extends HTMLElement {
         .copy-btn:hover { background: var(--secondary-background-color); }
       </style>
 
-      <div class="section">Card settings</div>
+      <div class="section">${_t(this._hass, "editor_section_card_settings")}</div>
       <div class="root-grid">
         <div class="field" style="grid-column:1/-1">
-          <label>Nordpool entity</label>
+          <label>${_t(this._hass, "editor_label_entity")}</label>
           <input id="entity-input" value="${c.entity ?? ''}" placeholder="sensor.nordpool_kwh_..."/>
         </div>
         <div class="field" style="grid-column:1/-1">
-          <label>Card title (optional)</label>
-          <input id="title-input" value="${escHtml(c.title ?? '')}" placeholder="Electricity cost"/>
+          <label>${_t(this._hass, "editor_label_title")}</label>
+          <input id="title-input" value="${escHtml(c.title ?? '')}" placeholder="${_t(this._hass, "title_default")}"/>
         </div>
         <div class="field">
-          <label>Graph: hours ahead</label>
+          <label>${_t(this._hass, "editor_label_hours_ahead")}</label>
           <input id="hours-input" type="number" min="1" max="24" value="${c.hours_ahead ?? 6}"/>
         </div>
         <div class="field">
-          <label>Best window: search hours</label>
+          <label>${_t(this._hass, "editor_label_search_hours")}</label>
           <input id="search-input" type="number" min="1" max="24" value="${c.search_hours ?? 12}"/>
         </div>
         <div class="field">
-          <label>Good price ceiling (per kWh)</label>
+          <label>${_t(this._hass, "editor_label_price_good")}</label>
           <input id="price-good-input" type="number" step="0.1" min="0.1" value="${c.price_good ?? 1.5}"/>
         </div>
         <div class="field">
-          <label>Normal price ceiling (per kWh)</label>
+          <label>${_t(this._hass, "editor_label_price_ok")}</label>
           <input id="price-ok-input" type="number" step="0.1" min="0.1" value="${c.price_ok ?? 3.0}"/>
         </div>
       </div>
 
-      <div class="section">Advanced (optional)</div>
-      <div class="hint">Leave blank to auto-detect from the sensor, or set explicitly for non-SEK currencies.</div>
+      <div class="section">${_t(this._hass, "editor_section_advanced")}</div>
+      <div class="hint">${_t(this._hass, "editor_hint_advanced")}</div>
       <div class="root-grid">
         <div class="field">
-          <label>Currency suffix</label>
-          <input id="currency-input" value="${c.currency ?? ''}" placeholder="auto (kr, €, $...)"/>
+          <label>${_t(this._hass, "editor_label_currency")}</label>
+          <input id="currency-input" value="${c.currency ?? ''}" placeholder="${_t(this._hass, "editor_placeholder_currency")}"/>
         </div>
         <div class="field">
-          <label>Unit suffix</label>
-          <input id="unit-input" value="${c.unit ?? ''}" placeholder="auto (kWh)"/>
+          <label>${_t(this._hass, "editor_label_unit")}</label>
+          <input id="unit-input" value="${c.unit ?? ''}" placeholder="${_t(this._hass, "editor_placeholder_unit")}"/>
         </div>
         <div class="field">
-          <label>Gauge/slider max price</label>
-          <input id="price-max-input" type="number" step="0.01" min="0.01" value="${c.price_max ?? ''}" placeholder="auto (price_ok × 5/3)"/>
+          <label>${_t(this._hass, "editor_label_price_max")}</label>
+          <input id="price-max-input" type="number" step="0.01" min="0.01" value="${c.price_max ?? ''}" placeholder="${_t(this._hass, "editor_placeholder_price_max")}"/>
         </div>
         <div class="field">
-          <label>Gauge/slider min price</label>
+          <label>${_t(this._hass, "editor_label_price_min")}</label>
           <input id="price-min-input" type="number" step="0.01" min="0" value="${c.price_min ?? 0}"/>
         </div>
       </div>
 
-      <div class="section">Activities</div>
+      <div class="section">${_t(this._hass, "editor_section_activities")}</div>
       <div id="activity-list">${activityRows}</div>
-      <button class="add-btn" id="add-btn">+ Add activity</button>
+      <button class="add-btn" id="add-btn">${_t(this._hass, "editor_add_activity")}</button>
 
-      <div class="section">Generated YAML</div>
-      <button class="copy-btn" id="copy-btn">Copy</button>
+      <div class="section">${_t(this._hass, "editor_section_yaml")}</div>
+      <button class="copy-btn" id="copy-btn">${_t(this._hass, "editor_copy")}</button>
       <div class="yaml-box" id="yaml-preview"></div>`;
 
     // ── Root field listeners — use 'change' not 'input' to avoid per-keystroke
@@ -390,8 +621,8 @@ class ElectricityCostCardEditor extends HTMLElement {
         const yaml = this.shadowRoot.getElementById('yaml-preview').textContent;
         navigator.clipboard.writeText(yaml).then(() => {
           const btn = this.shadowRoot.getElementById('copy-btn');
-          btn.textContent = 'Copied!';
-          setTimeout(() => btn.textContent = 'Copy', 1500);
+          btn.textContent = _t(this._hass, "editor_copied");
+          setTimeout(() => btn.textContent = _t(this._hass, "editor_copy"), 1500);
         });
       });
 
@@ -466,7 +697,7 @@ class ElectricityCostCard extends HTMLElement {
 
   // Called by HA when the card config is set or changed.
   setConfig(config) {
-    if (!config.entity) throw new Error('electricity-cost-card: entity is required');
+    if (!config.entity) throw new Error('electricity-cost-card: ' + _t(this._hass, "entity_required"));
     this._config = {
       entity:       config.entity,
       title:        config.title        ?? null,   // Optional custom title; null = use default
@@ -607,16 +838,16 @@ class ElectricityCostCard extends HTMLElement {
   _priceStatus(p) {
     const good = this._config.price_good ?? 1.5;
     const ok   = this._config.price_ok   ?? 3.0;
-    if (p <= good) return { cls: 'good', label: 'Good price' };
-    if (p <= ok)   return { cls: 'ok',   label: 'Normal'     };
-    return               { cls: 'bad',   label: 'High price'  };
+    if (p <= good) return { cls: 'good', label: _t(this._hass, "price_status_good") };
+    if (p <= ok)   return { cls: 'ok',   label: _t(this._hass, "price_status_ok") };
+    return               { cls: 'bad',   label: _t(this._hass, "price_status_bad") };
   }
 
   // Per-activity simple recommendation (used when no duration_hours).
   _simpleRec(price, threshold) {
-    if (price <= threshold)     return { cls: 'good', label: 'Good now' };
-    if (price <= threshold * 2) return { cls: 'ok',   label: 'OK now'   };
-    return                             { cls: 'bad',  label: 'Wait'     };
+    if (price <= threshold)     return { cls: 'good', label: _t(this._hass, "simple_rec_good") };
+    if (price <= threshold * 2) return { cls: 'ok',   label: _t(this._hass, "simple_rec_ok") };
+    return                             { cls: 'bad',  label: _t(this._hass, "simple_rec_bad") };
   }
 
 
@@ -709,7 +940,7 @@ class ElectricityCostCard extends HTMLElement {
   // automatically, matching the x-axis time labels below the chart.
   _buildGraph(blocks) {
     if (!blocks.length) {
-      return '<div style="font-size:11px;color:var(--secondary-text-color);padding:8px 0;">No price data available</div>';
+      return `<div style="font-size:11px;color:var(--secondary-text-color);padding:8px 0;">${_t(this._hass, "no_price_data")}</div>`;
     }
     const prices = blocks.map(b => b.price);
     const maxP   = Math.max(...prices, 0.1);
@@ -790,7 +1021,7 @@ class ElectricityCostCard extends HTMLElement {
               <div class="activity-name">${escHtml(activity.name || '')}</div>
               <div class="activity-sub">${kwhStr}</div>
             </div>
-            <div class="activity-right" style="color:var(--secondary-text-color);font-size:12px;">Loading…</div>
+            <div class="activity-right" style="color:var(--secondary-text-color);font-size:12px;">${_t(this._hass, "loading")}</div>
           </div>`;
       }
       const price   = this._simPrice !== null ? this._simPrice : this._livePrice;
@@ -883,7 +1114,7 @@ class ElectricityCostCard extends HTMLElement {
         : `${this._fmt(best.costMin)}–${this._fmt(best.costMax)} ${currency}`;
       return `
         <div class="best-row">
-          <span class="best-label"><span class="best-dot"></span>Best ${best.startTime}–${best.endTime}</span>
+          <span class="best-label"><span class="best-dot"></span>${_t(this._hass, "best_window", { start: best.startTime, end: best.endTime })}</span>
           <span class="best-cost">${bestStr}</span>
         </div>`;
     })() : '';
@@ -969,7 +1200,7 @@ class ElectricityCostCard extends HTMLElement {
     const activities   = this._config.activities.map(a => this._renderActivity(a)).join('');
     const timeNow      = new Date().toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
     // Use configured title or fall back to default
-    const cardTitle    = escHtml(this._config.title || 'Electricity cost');
+    const cardTitle    = escHtml(this._config.title || _t(this._hass, "title_default"));
 
     this.shadowRoot.innerHTML = `
       <style>
@@ -1077,10 +1308,10 @@ class ElectricityCostCard extends HTMLElement {
           <div class="price-row">
             <span class="price-value">${hasPrice ? price.toFixed(2) : '–'}</span>
             <span class="price-unit">${currency}/${unit}</span>
-            <span class="sim-tag" id="sim-tag" role="status" aria-live="polite" style="display:${isSimulating ? '' : 'none'}">SIMULATION</span>
+            <span class="sim-tag" id="sim-tag" role="status" aria-live="polite" style="display:${isSimulating ? '' : 'none'}">${_t(this._hass, "simulation_tag")}</span>
           </div>
           <span class="badge ${hasPrice ? status.cls : 'ok'}">
-            <span class="badge-dot"></span><span class="badge-label">${hasPrice ? status.label : 'Loading…'}</span>
+            <span class="badge-dot"></span><span class="badge-label">${hasPrice ? status.label : _t(this._hass, "loading")}</span>
           </span>
         </div>
 
@@ -1094,14 +1325,14 @@ class ElectricityCostCard extends HTMLElement {
         </div>
 
         <div class="slider-row">
-          <input type="range" id="price-slider" aria-label="Simulate price" min="${priceMin.toFixed(2)}" max="${priceMax.toFixed(2)}" step="0.01" value="${price.toFixed(2)}"/>
-          <button class="reset-btn" id="reset-btn" style="display:${isSimulating ? '' : 'none'}">↺ Live</button>
+          <input type="range" id="price-slider" aria-label="${_t(this._hass, "simulate_price_aria")}" min="${priceMin.toFixed(2)}" max="${priceMax.toFixed(2)}" step="0.01" value="${price.toFixed(2)}"/>
+          <button class="reset-btn" id="reset-btn" style="display:${isSimulating ? '' : 'none'}">${_t(this._hass, "reset_live")}</button>
         </div>
 
-        <div class="section-label">Next ${this._config.hours_ahead} hours</div>
+        <div class="section-label">${_t(this._hass, "next_hours", { hours: this._config.hours_ahead })}</div>
         <div class="graph-wrap">${graph}</div>
 
-        <div class="section-label">Activities</div>
+        <div class="section-label">${_t(this._hass, "activities_label")}</div>
         <div class="activities">${activities}</div>
 
         <div class="divider"></div>

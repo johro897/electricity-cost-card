@@ -15,6 +15,7 @@ A Home Assistant custom card that displays real-time electricity pricing from No
 - **Simulation slider** — drag to simulate any price and see how costs change; resets to live with one tap
 - **Visual editor** — configure all settings directly in the HA dashboard UI, with a generated YAML snippet you can copy
 - **Threshold-based recommendations** — Good / OK / Wait per appliance, based on price per kWh vs your own threshold
+- **Multi-language UI** — auto-translates to your Home Assistant language: English (default), Swedish, German, French
 
 
 ## Requirements
@@ -233,6 +234,12 @@ All configuration lives in the dashboard YAML (`ui-lovelace.yaml` or the `.stora
 
 
 ## Changelog
+
+### v2.7
+**Language support** — [#15](https://github.com/johro897/electricity-cost-card/issues/15)
+- All rendered UI text (status badges, recommendation labels, section headers, simulation tag, best-window text, loading/no-data states, and the entire visual editor) now auto-translates based on your Home Assistant instance's configured language
+- Supported languages: **English** (default), **Swedish**, **German**, **French** — falls back to English for any other language
+- Entity IDs, YAML config keys, and other technical values are unaffected — only display text changed
 
 ### v2.6
 **Security hardening** — [#9](https://github.com/johro897/electricity-cost-card/issues/9)
