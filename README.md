@@ -237,7 +237,7 @@ All configuration lives in the dashboard YAML (`ui-lovelace.yaml` or the `.stora
 
 ## Changelog
 
-### v2.7 (in progress — release-2.7 branch, not yet shipped)
+### v2.7
 **Graph hover tooltip** — [#16](https://github.com/johro897/electricity-cost-card/issues/16)
 - Hovering any bar in the price graph now shows its exact time and price in a small floating tooltip, styled to match the card's theme instead of a plain browser tooltip
 - Desktop mouse hover only for now — no touch/tap support yet
