@@ -55,6 +55,8 @@ Electricity Cost Card is available directly in the HACS default catalog. Search 
 
 Add the card to any dashboard via the UI card picker, or paste the YAML manually.
 
+> **Not sure of your Nordpool sensor's entity ID?** Check **Developer Tools → States**, filter by "nordpool", and use the exact `sensor.*` ID shown there — don't assume it matches the examples below verbatim.
+
 ### Minimal example (SEK / Nordic markets)
 
 ```yaml
@@ -234,6 +236,18 @@ The editor does not save to a file — it updates the card config in your dashbo
 
 All configuration lives in the dashboard YAML (`ui-lovelace.yaml` or the `.storage/lovelace.*` files depending on your setup). It is included in Home Assistant backups automatically and shared across all devices and browsers that access your HA instance.
 
+
+## Troubleshooting
+
+| Problem | Solution |
+|---|---|
+| Card not found / blank card | Verify the resource is registered under **Settings → Dashboards → Resources** and hard-refresh the browser (`Ctrl/Cmd + Shift + R`) |
+| Wrong currency symbol shown, or defaults to `kr` unexpectedly | The card reads `attributes.currency` from your Nordpool sensor and falls back to `kr` if that attribute is missing — set `currency` explicitly in the card config to override |
+| Graph doesn't extend past midnight / best-window search misses cheap overnight hours | Nordpool typically publishes `attributes.tomorrow` around 13:00 each day — before that, only today's prices are available and the graph/search can't cross midnight yet |
+| Gauge or simulation slider range looks too high/low for my market | `price_max` defaults to `price_ok × 5/3` — set `price_ok` (and `price_max` directly if needed) to match your market's actual price range, see the EUR example above |
+| An activity's cost looks like a flat spot-price estimate, not a real integrated cost | Only activities with `duration_hours` set use the actual upcoming 15-minute price blocks — without it, the card shows the current spot price only |
+| Card doesn't update when the price changes | The card only re-renders when the Nordpool sensor's *state* actually changes — check the entity's own history in Developer Tools if it seems stuck |
+| Visual editor changes don't seem to persist | The editor updates the card's config in your dashboard YAML directly (not a separate file) — check you're on a storage-mode (UI-managed) dashboard, not a YAML-mode one |
 
 ## Changelog
 
